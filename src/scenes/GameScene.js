@@ -41,6 +41,8 @@ export class GameScene extends Phaser.Scene {
     this.paulRescued = data.paulRescued || false;
     this.savedOpenedChests = data.openedChests || [];
     this.savedTrackedQuestId = data.trackedQuestId || null;
+    // Prevent instant door re-trigger when spawning near an exit
+    this._doorCooldown = !!data.mapData;
   }
 
   create() {
@@ -225,6 +227,11 @@ export class GameScene extends Phaser.Scene {
         null,
         this
       );
+    }
+
+    // Clear door cooldown after player has moved away from spawn
+    if (this._doorCooldown) {
+      this.time.delayedCall(800, () => { this._doorCooldown = false; });
     }
 
     // Pond visit overlap (set up here because player must exist)

@@ -22,47 +22,65 @@ export class QuestBook {
     const bookY = h / 2;
     const bookW = 210;
     const bookH = 126;
+    const bookLeft = bookX - bookW / 2;
+    const bookTop = bookY - bookH / 2;
+
+    // Page content areas (proportional to 240x144 source):
+    // Left page usable: ~x 15 to 90, Right page: ~x 120 to 195
+    const leftX = bookLeft + 15;
+    const leftW = 75;
+    const rightX = bookLeft + 120;
+    const rightW = 75;
+    const pageTop = bookTop + 10;
 
     const book = scene.add.image(bookX, bookY, 'book-ui', 'book-open-tan');
     book.setDisplaySize(bookW, bookH);
     this.container.add(book);
 
-    // Title on left page
-    const leftPageX = bookX - bookW / 4;
-    const title = scene.add.text(leftPageX, bookY - bookH / 2 + 12, 'QUEST JOURNAL', {
+    // Title centered on left page
+    const title = scene.add.text(leftX + leftW / 2, pageTop + 2, 'QUESTS', {
       fontSize: '7px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       fontStyle: 'bold',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5, 0);
     this.container.add(title);
 
     // Quest text on left page
-    this.questTextLeft = scene.add.text(bookX - bookW / 2 + 16, bookY - bookH / 2 + 22, '', {
+    this.questTextLeft = scene.add.text(leftX, pageTop + 14, '', {
       fontSize: '5px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       lineSpacing: 2,
-      wordWrap: { width: bookW / 2 - 24 },
+      wordWrap: { width: leftW },
     });
     this.container.add(this.questTextLeft);
 
+    // Right page header
+    const rightTitle = scene.add.text(rightX + rightW / 2, pageTop + 2, 'LOG', {
+      fontSize: '7px',
+      fontFamily: 'CuteFantasy',
+      color: '#3d2510',
+      fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
+    this.container.add(rightTitle);
+
     // Quest text on right page
-    this.questTextRight = scene.add.text(bookX + 6, bookY - bookH / 2 + 12, '', {
+    this.questTextRight = scene.add.text(rightX, pageTop + 14, '', {
       fontSize: '5px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       lineSpacing: 2,
-      wordWrap: { width: bookW / 2 - 24 },
+      wordWrap: { width: rightW },
     });
     this.container.add(this.questTextRight);
 
-    // Hint
-    const hint = scene.add.text(bookX, bookY + bookH / 2 - 6, 'Press Q to close', {
+    // Hint below book
+    const hint = scene.add.text(bookX, bookTop + bookH + 6, 'Press Q to close', {
       fontSize: '5px',
       fontFamily: 'CuteFantasy',
-      color: '#8b6d4a',
-    }).setOrigin(0.5);
+      color: '#aaaaaa',
+    }).setOrigin(0.5, 0);
     this.container.add(hint);
   }
 

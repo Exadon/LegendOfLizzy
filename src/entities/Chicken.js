@@ -48,8 +48,8 @@ export class Chicken extends Phaser.Physics.Arcade.Sprite {
       this.play('chicken-idle', true);
     } else {
       this.play('chicken-walk', true);
-      // Always update facing direction when moving
-      this.setFlipX(vx < 0);
+      // Chicken sprite faces left by default; flip when moving right
+      this.setFlipX(vx > 0);
     }
 
     this.setDepth(this.y);
