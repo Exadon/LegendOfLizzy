@@ -39,7 +39,7 @@ export class QuestBook {
 
     // Title centered on left page
     const title = scene.add.text(leftX + leftW / 2, pageTop + 2, 'QUESTS', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       fontStyle: 'bold',
@@ -48,7 +48,7 @@ export class QuestBook {
 
     // Quest text on left page
     this.questTextLeft = scene.add.text(leftX, pageTop + 14, '', {
-      fontSize: '5px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       lineSpacing: 2,
@@ -58,7 +58,7 @@ export class QuestBook {
 
     // Right page header
     const rightTitle = scene.add.text(rightX + rightW / 2, pageTop + 2, 'LOG', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       fontStyle: 'bold',
@@ -67,7 +67,7 @@ export class QuestBook {
 
     // Quest text on right page
     this.questTextRight = scene.add.text(rightX, pageTop + 14, '', {
-      fontSize: '5px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       lineSpacing: 2,
@@ -77,7 +77,7 @@ export class QuestBook {
 
     // Hint below book
     const hint = scene.add.text(bookX, bookTop + bookH + 6, 'Press Q to close', {
-      fontSize: '5px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: '#aaaaaa',
     }).setOrigin(0.5, 0);

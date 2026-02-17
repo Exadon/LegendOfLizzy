@@ -105,7 +105,7 @@ export class MapOverlay {
 
     // Hint
     const hint = scene.add.text(w / 2, h - 16, 'Press M to close', {
-      fontSize: '6px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: '#aaaaaa',
     }).setOrigin(0.5);

@@ -35,7 +35,7 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     this.healthBarFill.setOrigin(0, 0.5);
     this.healthBarBg.setOrigin(0, 0.5);
     this.nameText = scene.add.text(x + 25, y - 38, 'SKELETON KING', {
-      fontSize: '6px', fontFamily: 'CuteFantasy', color: '#ff6666',
+      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#ff6666',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 1).setDepth(10002);
 

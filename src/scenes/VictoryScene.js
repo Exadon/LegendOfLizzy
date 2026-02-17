@@ -10,11 +10,6 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   create() {
-    const _origText = this.add.text.bind(this.add);
-    this.add.text = (x, y, content, style) => {
-      return _origText(x, y, content, Object.assign({}, style, { resolution: 2 }));
-    };
-
     const w = this.cameras.main.width;
     const h = this.cameras.main.height;
     const sfx = this.registry.get('sfx');
@@ -105,7 +100,7 @@ export class VictoryScene extends Phaser.Scene {
         'has saved everyone.',
       ];
       const story = this.add.text(w / 2, 90, storyLines.join('\n'), {
-        fontSize: '6px',
+        fontSize: '8px',
         fontFamily: 'CuteFantasy',
         color: '#ccccdd',
         align: 'center',
@@ -125,7 +120,7 @@ export class VictoryScene extends Phaser.Scene {
         `Gold Earned: ${gold}`,
         `Quests Completed: ${quests}`,
       ].join('\n'), {
-        fontSize: '6px',
+        fontSize: '8px',
         fontFamily: 'CuteFantasy',
         color: '#aabbcc',
         align: 'center',
@@ -143,7 +138,7 @@ export class VictoryScene extends Phaser.Scene {
         'Built with Phaser 3',
         'Made with love',
       ].join('\n'), {
-        fontSize: '5px',
+        fontSize: '8px',
         fontFamily: 'CuteFantasy',
         color: '#888899',
         align: 'center',
@@ -155,7 +150,7 @@ export class VictoryScene extends Phaser.Scene {
     // Return to title prompt
     this.time.delayedCall(7000, () => {
       const prompt = this.add.text(w / 2, h - 14, 'Press ENTER to return', {
-        fontSize: '7px',
+        fontSize: '9px',
         fontFamily: 'CuteFantasy',
         color: '#ffffff',
       }).setOrigin(0.5).setAlpha(0);

@@ -66,13 +66,13 @@ export class FishingMinigame {
 
     // Text
     const title = scene.add.text(cx, barY - 14, 'FISHING! Press SPACE', {
-      fontSize: '7px', fontFamily: 'CuteFantasy', color: '#88ccff',
+      fontSize: '9px', fontFamily: 'CuteFantasy', color: '#88ccff',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.container.add(title);
 
     const fishLabel = scene.add.text(cx, barY + barH + 8, `${this.fish.name} spotted!`, {
-      fontSize: '6px', fontFamily: 'CuteFantasy', color: '#ffdd00',
+      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#ffdd00',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.container.add(fishLabel);

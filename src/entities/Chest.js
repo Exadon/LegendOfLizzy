@@ -24,7 +24,7 @@ export class Chest extends Phaser.Physics.Arcade.Sprite {
 
     // Prompt
     this.prompt = scene.add.text(x, y - 24, '[E]', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#ffdd00',
       stroke: '#000000',

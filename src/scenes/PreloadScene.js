@@ -143,9 +143,6 @@ export class PreloadScene extends Phaser.Scene {
     this.load.spritesheet('pharaoh', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/NPC/Pharaoh.png', {
       frameWidth: 64, frameHeight: 64,
     });
-    this.load.spritesheet('mummy-enemy', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/Enemies/Mummy.png', {
-      frameWidth: 32, frameHeight: 32,
-    });
     this.load.image('desert-temple', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/Temple/Desert_Temple.png');
     this.load.image('desert-obelisk-1', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/Temple/Desert_Obelisk_1.png');
     this.load.image('palm-tree-1', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/Props/Palm_Tree_1.png');
@@ -192,7 +189,7 @@ export class PreloadScene extends Phaser.Scene {
       'oak-tree', 'oak-tree-small', 'chest', 'fences',
       'outdoor-decor', 'house-wood',
       'book-ui', 'ui-bars', 'ui-frames', 'ui-icons', 'ui-pop-up', 'ui-ribbons',
-      'desert-person-1', 'pharaoh', 'mummy-enemy',
+      'desert-person-1', 'pharaoh',
       'desert-temple', 'desert-obelisk-1', 'palm-tree-1', 'cactus', 'desert-rocks',
       'desert-beach-1', 'desert-cliff-1', 'desert-grass',
       'dungeon-1-tiles', 'dungeon-2-tiles', 'dungeon-objects', 'chest-anim', 'gold-piles',

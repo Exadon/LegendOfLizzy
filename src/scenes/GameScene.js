@@ -46,12 +46,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    // High-resolution text: render at 2x so text is crisp at zoom level
-    const _origText = this.add.text.bind(this.add);
-    this.add.text = (x, y, content, style) => {
-      return _origText(x, y, content, Object.assign({}, style, { resolution: 2 }));
-    };
-
     const map = this.mapData;
     this.worldWidth = map.width * map.tileSize;
     this.worldHeight = map.height * map.tileSize;
@@ -261,7 +255,7 @@ export class GameScene extends Phaser.Scene {
 
     // Quest tracker UI (below inventory hotbar)
     this.questTrackerText = this.add.text(this.cameras.main.width - 8, 28, '', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#ffffff',
       stroke: '#000000',
@@ -273,7 +267,7 @@ export class GameScene extends Phaser.Scene {
     // Key hints HUD
     const hintY = this.cameras.main.height - 8;
     this.add.text(4, hintY, 'ESC:Menu M:Map Q:Quests SHIFT:Dodge 1-3:Items F:Magic', {
-      fontSize: '5px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: '#888888',
       stroke: '#000000',
@@ -346,28 +340,6 @@ export class GameScene extends Phaser.Scene {
       loop: true,
     });
 
-    // Cave/temple darkness overlay with torch light (RenderTexture approach)
-    if (this.isCave || this.isTemple) {
-      const camW = this.cameras.main.width;
-      const camH = this.cameras.main.height;
-      this.darknessRT = this.add.renderTexture(0, 0, camW, camH);
-      this.darknessRT.setScrollFactor(0).setDepth(7500);
-
-      // Create torch light texture (soft gradient circle)
-      const torchR = this.isTemple ? 60 : 50;
-      const size = torchR * 2 + 24;
-      const gfx = this.make.graphics({ x: 0, y: 0, add: false });
-      // Draw gradient: solid center fading to transparent edge
-      for (let r = torchR + 12; r > 0; r -= 1) {
-        const t = Math.max(0, (r - torchR) / 12);
-        const alpha = r <= torchR ? 1.0 : (1.0 - t * t);
-        gfx.fillStyle(0xffffff, alpha);
-        gfx.fillCircle(size / 2, size / 2, r);
-      }
-      gfx.generateTexture('torch-light', size, size);
-      gfx.destroy();
-    }
-
     // Day/night cycle (overworld only)
     // dayTime: 0-1 where 0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk
     this.dayTime = this.savedDayTime ?? 0.35; // start in morning
@@ -437,7 +409,7 @@ export class GameScene extends Phaser.Scene {
     this.dialogueContainer.add(bg);
 
     this.dialogueSpeaker = this.add.text(14, boxY + 4, '', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
       fontStyle: 'bold',
@@ -1372,7 +1344,7 @@ export class GameScene extends Phaser.Scene {
 
     if (active.length > 0) {
       const questHeader = this.add.text(cx, yPos, '-- Quests --', {
-        fontSize: '7px', fontFamily: 'CuteFantasy', color: '#5c3a1e',
+        fontSize: '9px', fontFamily: 'CuteFantasy', color: '#5c3a1e',
       }).setOrigin(0.5);
       this._pauseContainer.add(questHeader);
       yPos += 14;
@@ -1385,7 +1357,7 @@ export class GameScene extends Phaser.Scene {
         const statusStr = q.state === 'ready' ? ' [DONE!]' : `: ${q.progress}/${q.objective.count}`;
 
         const qText = this.add.text(38, yPos, `${marker} ${i + 1}: ${q.name}${statusStr}`, {
-          fontSize: '7px', fontFamily: 'CuteFantasy',
+          fontSize: '9px', fontFamily: 'CuteFantasy',
           color: isTracked ? '#2a1a08' : '#7a6a5a',
         });
         this._pauseContainer.add(qText);
@@ -1394,7 +1366,7 @@ export class GameScene extends Phaser.Scene {
       });
 
       const trackHint = this.add.text(cx, yPos + 4, 'Press 1-' + maxShown + ' to track quest', {
-        fontSize: '6px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
+        fontSize: '8px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
       }).setOrigin(0.5);
       this._pauseContainer.add(trackHint);
       yPos += 18;
@@ -1405,7 +1377,7 @@ export class GameScene extends Phaser.Scene {
     const completed = allQuests.filter(q => q.state === 'completed');
     if (completed.length > 0) {
       const compText = this.add.text(cx, yPos, `Completed: ${completed.length} quest${completed.length > 1 ? 's' : ''}`, {
-        fontSize: '6px', fontFamily: 'CuteFantasy', color: '#2d7a2d',
+        fontSize: '8px', fontFamily: 'CuteFantasy', color: '#2d7a2d',
       }).setOrigin(0.5);
       this._pauseContainer.add(compText);
       yPos += 16;
@@ -1518,7 +1490,7 @@ export class GameScene extends Phaser.Scene {
     ).setScrollFactor(0).setDepth(9998);
 
     const notif = this.add.text(w / 2, 30, msg, {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#3d2510',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
@@ -1743,7 +1715,7 @@ export class GameScene extends Phaser.Scene {
     this.shopContainer.add(bg);
 
     const title = this.add.text(boxX, boxY - boxH / 2 + 6, `${npc.npcName}'s Shop  (Gold: ${this.gold})`, {
-      fontSize: '7px', fontFamily: 'CuteFantasy', color: '#3d2510',
+      fontSize: '9px', fontFamily: 'CuteFantasy', color: '#3d2510',
     }).setOrigin(0.5, 0);
     this.shopContainer.add(title);
 
@@ -1752,10 +1724,10 @@ export class GameScene extends Phaser.Scene {
       const prefix = i < 9 ? `${i + 1}` : '*';
       const suffix = item.desc ? ` (${item.desc})` : '';
       const label = this.add.text(20, y, `${prefix}: ${item.name}${suffix}`, {
-        fontSize: '6px', fontFamily: 'CuteFantasy', color: '#2a1a08',
+        fontSize: '8px', fontFamily: 'CuteFantasy', color: '#2a1a08',
       }).setScrollFactor(0);
       const price = this.add.text(w - 20, y, `${item.price}g`, {
-        fontSize: '6px', fontFamily: 'CuteFantasy',
+        fontSize: '8px', fontFamily: 'CuteFantasy',
         color: this.gold >= item.price ? '#2a1a08' : '#999999',
       }).setOrigin(1, 0).setScrollFactor(0);
       this.shopContainer.add(label);
@@ -1763,7 +1735,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     const hint = this.add.text(boxX, boxY + boxH / 2 - 6, 'ESC to close', {
-      fontSize: '5px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
+      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
     }).setOrigin(0.5, 1).setScrollFactor(0);
     this.shopContainer.add(hint);
 
@@ -2028,10 +2000,10 @@ export class GameScene extends Phaser.Scene {
         const dialogBg = this.add.rectangle(cam.width / 2, cam.height / 2 - 20, cam.width - 24, 28, 0x1a1a2e, 0.95)
           .setScrollFactor(0).setDepth(11000).setStrokeStyle(1, 0x8844ff);
         const dialogName = this.add.text(16, cam.height / 2 - 30, 'Paul the Wizard', {
-          fontSize: '6px', fontFamily: 'CuteFantasy', color: '#aa88ff', fontStyle: 'bold',
+          fontSize: '8px', fontFamily: 'CuteFantasy', color: '#aa88ff', fontStyle: 'bold',
         }).setScrollFactor(0).setDepth(11001);
         const dialogText = this.add.text(16, cam.height / 2 - 20, 'Not so fast, Lizzy! I\'ve got you covered!', {
-          fontSize: '7px', fontFamily: 'CuteFantasy', color: '#ffffff',
+          fontSize: '9px', fontFamily: 'CuteFantasy', color: '#ffffff',
           wordWrap: { width: cam.width - 40 },
         }).setScrollFactor(0).setDepth(11001);
 
@@ -2285,7 +2257,7 @@ export class GameScene extends Phaser.Scene {
 
   showFloatingText(x, y, msg, color) {
     const text = this.add.text(x + (Math.random() - 0.5) * 6, y, msg, {
-      fontSize: '6px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: color,
       stroke: '#000000',
@@ -2528,7 +2500,7 @@ export class GameScene extends Phaser.Scene {
     this.add.rectangle(caveX, caveY, 28, 20, 0x3a2a1a).setDepth(caveY - 1);
     this.add.rectangle(caveX, caveY - 10, 30, 6, 0x555544).setDepth(caveY);
     this.add.text(caveX, caveY - 18, 'CAVE', {
-      fontSize: '5px', fontFamily: 'CuteFantasy', color: '#888866',
+      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#888866',
     }).setOrigin(0.5).setDepth(caveY + 1);
 
     // Rocks
@@ -2731,19 +2703,6 @@ export class GameScene extends Phaser.Scene {
           }
         }
       }
-    }
-
-    // Cave/temple darkness torch effect (RenderTexture)
-    if (this.darknessRT) {
-      const cam = this.cameras.main;
-      const px = this.player.x - cam.scrollX;
-      const py = this.player.y - cam.scrollY;
-      const darkness = this.isTemple ? 0.6 : 0.85;
-      const torchR = this.isTemple ? 60 : 50;
-      const size = torchR * 2 + 24;
-
-      this.darknessRT.fill(0x000000, darkness);
-      this.darknessRT.erase('torch-light', px - size / 2, py - size / 2);
     }
 
     // Day/night cycle update

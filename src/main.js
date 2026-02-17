@@ -10,11 +10,8 @@ const config = {
   type: Phaser.AUTO,
   width: 320,
   height: 240,
-  pixelArt: false,
+  pixelArt: true,
   roundPixels: true,
-  render: {
-    antialias: true,
-  },
   physics: {
     default: 'arcade',
     arcade: {

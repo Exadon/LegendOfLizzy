@@ -9,11 +9,6 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
-    const _origText = this.add.text.bind(this.add);
-    this.add.text = (x, y, content, style) => {
-      return _origText(x, y, content, Object.assign({}, style, { resolution: 2 }));
-    };
-
     const w = this.cameras.main.width;
     const h = this.cameras.main.height;
 
@@ -76,7 +71,7 @@ export class TitleScene extends Phaser.Scene {
     // Press ENTER prompt
     const promptText = hasSave ? 'ENTER: Continue  N: New Game' : 'Press ENTER';
     const prompt = this.add.text(w / 2, h - 36, promptText, {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#ffffff',
     }).setOrigin(0.5);
@@ -91,7 +86,7 @@ export class TitleScene extends Phaser.Scene {
 
     // Credits
     this.add.text(w / 2, h - 14, 'Assets by Kenmi Art', {
-      fontSize: '5px',
+      fontSize: '8px',
       fontFamily: 'CuteFantasy',
       color: '#555577',
     }).setOrigin(0.5);

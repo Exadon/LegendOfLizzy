@@ -7,12 +7,6 @@ export class UIScene extends Phaser.Scene {
   }
 
   create() {
-    // High-resolution text: render at 2x so text is crisp at zoom level
-    const _origText = this.add.text.bind(this.add);
-    this.add.text = (x, y, content, style) => {
-      return _origText(x, y, content, Object.assign({}, style, { resolution: 2 }));
-    };
-
     // Hearts display
     this.hearts = [];
     this.maxHearts = 3;
@@ -37,7 +31,7 @@ export class UIScene extends Phaser.Scene {
     this.xpBarFill = this.add.rectangle(9, 39, 0, 5, 0x44bb44);
     this.xpBarFill.setOrigin(0, 0).setScrollFactor(0).setDepth(101);
     this.xpText = this.add.text(62, 37, 'Lv.1', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#44bb44',
       stroke: '#000000',
@@ -85,7 +79,7 @@ export class UIScene extends Phaser.Scene {
 
     // Time of day indicator
     this.timeText = this.add.text(this.cameras.main.width - 8, 26, '', {
-      fontSize: '7px',
+      fontSize: '9px',
       fontFamily: 'CuteFantasy',
       color: '#aaaacc',
       stroke: '#000000',
@@ -187,7 +181,7 @@ export class UIScene extends Phaser.Scene {
 
       // Key number label
       const keyLabel = this.add.text(x + 1, startY + 1, `${i + 1}`, {
-        fontSize: '6px',
+        fontSize: '8px',
         fontFamily: 'CuteFantasy',
         color: '#666688',
       }).setOrigin(0, 0).setScrollFactor(0).setDepth(102);
@@ -204,7 +198,7 @@ export class UIScene extends Phaser.Scene {
           // Count
           if (slot.count > 1) {
             const countText = this.add.text(x + slotSize - 2, startY + slotSize - 2, `${slot.count}`, {
-              fontSize: '7px',
+              fontSize: '9px',
               fontFamily: 'CuteFantasy',
               color: '#ffffff',
               stroke: '#000000',
