@@ -1,0 +1,2808 @@
+import Phaser from 'phaser';
+import { Player } from '../entities/Player.js';
+import { Enemy, Slime } from '../entities/Enemy.js';
+import { NPC } from '../entities/NPC.js';
+import { Chicken } from '../entities/Chicken.js';
+import { QuestManager, QUESTS } from '../systems/QuestManager.js';
+import { SFX } from '../systems/SFX.js';
+import { MAPS, OVERWORLD_MAP } from '../data/Maps.js';
+import { MapOverlay } from '../ui/MapOverlay.js';
+import { QuestBook } from '../ui/QuestBook.js';
+import { SaveManager } from '../systems/SaveManager.js';
+import { Inventory } from '../systems/Inventory.js';
+import { Music } from '../systems/Music.js';
+import { Unicorn } from '../entities/Unicorn.js';
+import { Fairy } from '../entities/Fairy.js';
+import { Bat } from '../entities/Bat.js';
+import { Ghost } from '../entities/Ghost.js';
+import { SkeletonKing } from '../entities/Boss.js';
+import { Scorpion } from '../entities/Scorpion.js';
+import { Pharaoh } from '../entities/Pharaoh.js';
+import { FishingMinigame } from '../ui/FishingMinigame.js';
+import { EquipmentManager, EQUIPMENT } from '../systems/Equipment.js';
+import { Chest } from '../entities/Chest.js';
+import { Pet } from '../entities/Pet.js';
+
+export class GameScene extends Phaser.Scene {
+  constructor() {
+    super('Game');
+  }
+
+  init(data) {
+    this.mapData = data.mapData || OVERWORLD_MAP;
+    this.savedQuestState = data.questState || null;
+    this.savedPlayerHealth = data.playerHealth || null;
+    this.savedGold = data.gold || 0;
+    this.savedXP = data.xp || 0;
+    this.savedLevel = data.level || 1;
+    this.savedInventory = data.inventory || null;
+    this.savedDayTime = data.dayTime ?? null;
+    this.savedEquipment = data.equipment || null;
+    this.paulRescued = data.paulRescued || false;
+    this.savedOpenedChests = data.openedChests || [];
+    this.savedTrackedQuestId = data.trackedQuestId || null;
+  }
+
+  create() {
+    // High-resolution text: render at 2x so text is crisp at zoom level
+    const _origText = this.add.text.bind(this.add);
+    this.add.text = (x, y, content, style) => {
+      return _origText(x, y, content, Object.assign({}, style, { resolution: 2 }));
+    };
+
+    const map = this.mapData;
+    this.worldWidth = map.width * map.tileSize;
+    this.worldHeight = map.height * map.tileSize;
+    this.isOverworld = map.name === 'overworld';
+    this.isCave = map.isDark || false;
+    this.isTemple = map.floorTile === 'sand-floor';
+
+    // SFX
+    this.sfx = this.registry.get('sfx') || new SFX();
+
+    // Music - persist across map transitions via registry
+    if (!this.registry.get('music')) {
+      this.registry.set('music', new Music());
+    }
+    this.music = this.registry.get('music');
+
+    // Quest system
+    this.questManager = new QuestManager();
+    for (const quest of Object.values(QUESTS)) {
+      this.questManager.addQuest(quest);
+    }
+    if (this.savedQuestState) {
+      this.questManager.restoreState(this.savedQuestState);
+    }
+
+    this.buildWorld(map);
+
+    // Player
+    const spawn = map.playerSpawn || { x: 200, y: 128 };
+    this.player = new Player(this, spawn.x, spawn.y);
+    if (this.savedPlayerHealth !== null) {
+      this.player.health = this.savedPlayerHealth;
+    }
+
+    // NPCs
+    this.npcs = this.add.group();
+    if (this.isOverworld) {
+      this.spawnNPCs();
+    }
+
+    // Interior NPCs
+    if (map.interiorNPCs) {
+      this.spawnInteriorNPCs(map.interiorNPCs);
+    }
+
+    // Enemies
+    this.enemies = this.add.group();
+    if (this.isOverworld) {
+      this.spawnEnemies();
+    }
+
+    // Cave enemies from map data
+    if (map.enemies) {
+      this.spawnMapEnemies(map.enemies);
+    }
+
+    // Boss (boss room only)
+    this.boss = null;
+    if (map.hasBoss) {
+      this.spawnBoss(map.bossType);
+      this.time.delayedCall(800, () => {
+        const bossName = map.bossType === 'pharaoh' ? 'The Pharaoh' : 'The Skeleton King';
+        this.showNotification(`${bossName} awaits...`);
+        this.cameras.main.shake(200, 0.008);
+      });
+    }
+
+    // Chickens (overworld only)
+    this.chickens = this.add.group();
+    if (this.isOverworld) {
+      this.spawnChickens();
+    }
+
+    // Treasure chests
+    this.chests = this.add.group();
+    this.spawnChests();
+
+    // Unicorns (overworld only)
+    this.unicorns = this.add.group();
+    if (this.isOverworld) {
+      this.spawnUnicorns();
+    }
+
+    // Fairies (overworld only)
+    this.fairies = this.add.group();
+    if (this.isOverworld) {
+      this.spawnFairies();
+    }
+
+    // Ghosts (overworld only, appear at night)
+    this.ghosts = this.add.group();
+    if (this.isOverworld) {
+      this.spawnGhosts();
+    }
+
+    // Interaction key
+    this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
+    // Map and quest book keys
+    this.mapKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+
+    // Pause menu key
+    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this._pauseOpen = false;
+    this._pauseContainer = null;
+    this.trackedQuestId = this.savedTrackedQuestId || null;
+
+    // Magic attack key
+    this.magicKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+    this.magicProjectiles = this.add.group();
+
+    // Inventory hotbar keys
+    this.itemKeys = [
+      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+    ];
+
+    // Collisions
+    this.physics.add.collider(this.player, this.obstacles);
+    this.physics.add.collider(this.player, this.npcs);
+    this.physics.add.collider(this.npcs, this.obstacles);
+    this.physics.add.collider(this.npcs, this.npcs);
+
+    this.physics.add.overlap(
+      this.player.swordHitbox,
+      this.enemies,
+      this.handleSwordHit,
+      null,
+      this
+    );
+
+    this.physics.add.overlap(
+      this.player,
+      this.enemies,
+      this.handleEnemyContact,
+      null,
+      this
+    );
+
+    if (this.isOverworld) {
+      this.physics.add.overlap(
+        this.player,
+        this.chickens,
+        this.handleChickenCollect,
+        null,
+        this
+      );
+    }
+
+    // Unicorn healing overlap
+    if (this.isOverworld) {
+      this.physics.add.overlap(this.player, this.unicorns, this.handleUnicornContact, null, this);
+    }
+
+    // Fairy buff overlap
+    if (this.isOverworld) {
+      this.physics.add.overlap(this.player, this.fairies, this.handleFairyContact, null, this);
+    }
+
+    // Ghost combat
+    if (this.isOverworld) {
+      this.physics.add.overlap(this.player.swordHitbox, this.ghosts, this.handleSwordHit, null, this);
+      this.physics.add.overlap(this.player, this.ghosts, this.handleEnemyContact, null, this);
+    }
+
+    if (this.doorZones) {
+      this.physics.add.overlap(
+        this.player,
+        this.doorZones,
+        this.handleDoor,
+        null,
+        this
+      );
+    }
+
+    // Pond visit overlap (set up here because player must exist)
+    if (this.pondVisitZone) {
+      this.physics.add.overlap(this.player, this.pondVisitZone, () => {
+        if (this._pondVisited) return;
+        const quest = this.questManager.getQuest('explore_pond');
+        if (!quest || quest.state !== 'active') return;
+        this._pondVisited = true;
+        this.questManager.trackEvent('visit', { target: 'pond' });
+        this.updateQuestTracker();
+        this.showNotification('Discovered: The Pond');
+      });
+    }
+
+    // Camera
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
+    this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+
+    // Dialogue state
+    this.inDialogue = false;
+    this.dialogueLines = [];
+    this.dialogueIndex = 0;
+    this.dialogueCallback = null;
+    this.createDialogueUI();
+
+    // Quest tracker UI (below inventory hotbar)
+    this.questTrackerText = this.add.text(this.cameras.main.width - 8, 28, '', {
+      fontSize: '7px',
+      fontFamily: 'CuteFantasy',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'right',
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(9000);
+    this.updateQuestTracker();
+
+    // Key hints HUD
+    const hintY = this.cameras.main.height - 8;
+    this.add.text(4, hintY, 'ESC:Menu M:Map Q:Quests SHIFT:Dodge 1-3:Items F:Magic', {
+      fontSize: '5px',
+      fontFamily: 'CuteFantasy',
+      color: '#888888',
+      stroke: '#000000',
+      strokeThickness: 1,
+    }).setOrigin(0, 1).setScrollFactor(0).setDepth(9000);
+
+    // Loot drops group
+    this.lootDrops = this.add.group();
+
+    // Hit-freeze state
+    this._inHitFreeze = false;
+    this._fairyAttackBuff = false;
+
+    // Gold and XP
+    this.gold = this.savedGold || 0;
+    this.xp = this.savedXP || 0;
+    this.level = this.savedLevel || 1;
+    this.xpToNext = this.level * 100;
+
+    // Inventory
+    this.inventory = new Inventory();
+    if (this.savedInventory) {
+      this.inventory.restoreState(this.savedInventory);
+    } else if (!this.savedQuestState) {
+      // New game: start with 1 health potion
+      this.inventory.addItem('health_potion', 1);
+    }
+
+    // Equipment
+    this.equipment = new EquipmentManager();
+    if (this.savedEquipment) {
+      this.equipment.restoreState(this.savedEquipment);
+    }
+    // Apply armor HP bonus
+    const hpBonus = this.equipment.getHPBonus();
+    if (hpBonus > 0) {
+      this.player.maxHealth += hpBonus;
+      if (this.savedPlayerHealth === null) {
+        this.player.health = this.player.maxHealth;
+      }
+    }
+
+    // Map overlay and quest book
+    this.mapOverlay = new MapOverlay(this);
+    this.questBook = new QuestBook(this);
+    this.overlayOpen = false;
+
+    // Corner minimap (overworld only)
+    this.minimap = null;
+    if (this.isOverworld) {
+      this._setupMinimap();
+    }
+
+    // Pet companion (unlocked after defeating Skeleton King)
+    this.pet = null;
+    const caveQuest = this.questManager.getQuest('clear_cave');
+    if (caveQuest && caveQuest.state === 'completed') {
+      const spawn = this.mapData.playerSpawn || { x: 200, y: 128 };
+      this.pet = new Pet(this, spawn.x + 16, spawn.y + 16);
+    }
+
+    // Fishing minigame
+    this.fishingGame = new FishingMinigame(this);
+    this._nearPond = false;
+
+    // Auto-save every 30 seconds
+    this.time.addEvent({
+      delay: 30000,
+      callback: () => { SaveManager.save(this); this.events.emit('auto-saved'); },
+      loop: true,
+    });
+
+    // Cave/temple darkness overlay with torch light (RenderTexture approach)
+    if (this.isCave || this.isTemple) {
+      const camW = this.cameras.main.width;
+      const camH = this.cameras.main.height;
+      this.darknessRT = this.add.renderTexture(0, 0, camW, camH);
+      this.darknessRT.setScrollFactor(0).setDepth(7500);
+
+      // Create torch light texture (soft gradient circle)
+      const torchR = this.isTemple ? 60 : 50;
+      const size = torchR * 2 + 24;
+      const gfx = this.make.graphics({ x: 0, y: 0, add: false });
+      // Draw gradient: solid center fading to transparent edge
+      for (let r = torchR + 12; r > 0; r -= 1) {
+        const t = Math.max(0, (r - torchR) / 12);
+        const alpha = r <= torchR ? 1.0 : (1.0 - t * t);
+        gfx.fillStyle(0xffffff, alpha);
+        gfx.fillCircle(size / 2, size / 2, r);
+      }
+      gfx.generateTexture('torch-light', size, size);
+      gfx.destroy();
+    }
+
+    // Day/night cycle (overworld only)
+    // dayTime: 0-1 where 0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk
+    this.dayTime = this.savedDayTime ?? 0.35; // start in morning
+    this.daySpeed = 0.008; // full cycle ~125 seconds
+    this.isNight = false;
+    if (this.isOverworld) {
+      this.dayOverlay = this.add.rectangle(
+        this.cameras.main.width / 2,
+        this.cameras.main.height / 2,
+        this.cameras.main.width,
+        this.cameras.main.height,
+        0x000033, 0
+      ).setScrollFactor(0).setDepth(8000).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    }
+
+    // Paul the Wizard rescue on death
+    this.events.on('player-dying', () => this._paulRescue());
+    this._paulRescueActive = false;
+
+    // Fade in (white if rescued by Paul)
+    if (this.paulRescued) {
+      this.cameras.main.fadeIn(600, 255, 255, 255);
+      this.time.delayedCall(800, () => {
+        this.showNotification('Paul the Wizard saved you! (-10 gold)');
+      });
+    } else {
+      this.cameras.main.fadeIn(400, 0, 0, 0);
+    }
+
+    // Start music for this map
+    const trackName = this.isOverworld ? 'overworld' : (this.isTemple ? 'interior' : (this.isCave ? 'interior' : 'interior'));
+    this.time.delayedCall(500, () => {
+      this.music.play(trackName, this.sfx);
+    });
+
+    // Launch UI scene for hearts/game over only
+    if (!this.scene.isActive('UI')) {
+      this.scene.launch('UI');
+    }
+
+    // Emit state after UI is launched so displays render correctly
+    this.time.delayedCall(0, () => {
+      if (this.savedPlayerHealth !== null) {
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      }
+      this.events.emit('gold-changed', this.gold);
+      this.events.emit('xp-changed', this.xp, this.xpToNext, this.level);
+      this.events.emit('inventory-changed', this.inventory.slots);
+    });
+  }
+
+  // --- Dialogue UI ---
+  createDialogueUI() {
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const boxH = 56;
+    const boxY = h - boxH - 4;
+
+    this.dialogueContainer = this.add.container(0, 0)
+      .setScrollFactor(0).setDepth(10000).setVisible(false);
+
+    const bg = this.add.nineslice(
+      w / 2, boxY + boxH / 2,
+      'ui-frames', 'panel-orange',
+      w - 12, boxH, 8, 8, 8, 8
+    );
+    this.dialogueContainer.add(bg);
+
+    this.dialogueSpeaker = this.add.text(14, boxY + 4, '', {
+      fontSize: '7px',
+      fontFamily: 'CuteFantasy',
+      color: '#3d2510',
+      fontStyle: 'bold',
+    });
+    this.dialogueContainer.add(this.dialogueSpeaker);
+
+    this.dialogueText = this.add.text(14, boxY + 14, '', {
+      fontSize: '8px',
+      fontFamily: 'CuteFantasy',
+      color: '#2a1a08',
+      wordWrap: { width: w - 36 },
+      lineSpacing: 3,
+    });
+    this.dialogueContainer.add(this.dialogueText);
+
+    const arrow = this.add.text(w - 18, boxY + boxH - 10, '\u25BC', {
+      fontSize: '8px',
+      fontFamily: 'CuteFantasy',
+      color: '#5c3a1e',
+    }).setOrigin(1, 1);
+    this.dialogueContainer.add(arrow);
+
+    this.tweens.add({
+      targets: arrow,
+      alpha: { from: 1, to: 0.2 },
+      duration: 400,
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  showDialogue(lines, callback, speakerName, portraitKey) {
+    this.inDialogue = true;
+    this.dialogueLines = lines;
+    this.dialogueIndex = 0;
+    this.dialogueCallback = callback;
+    this.dialogueSpeaker.setText(speakerName || '');
+    this.dialogueText.setText(lines[0]);
+    this.dialogueContainer.setVisible(true);
+    this.player.setVelocity(0, 0);
+    this.sfx.play('dialogue');
+
+    // Portrait
+    if (this.dialoguePortrait) {
+      this.dialoguePortrait.destroy();
+      this.dialoguePortrait = null;
+    }
+    if (portraitKey) {
+      const w = this.cameras.main.width;
+      const h = this.cameras.main.height;
+      const boxH = 56;
+      const boxY = h - boxH - 4;
+      this.dialoguePortrait = this.add.sprite(w - 34, boxY + boxH / 2, portraitKey, 0);
+      this.dialoguePortrait.setScale(0.7);
+      this.dialoguePortrait.setDepth(10001);
+      this.dialoguePortrait.setScrollFactor(0);
+      this.dialogueContainer.add(this.dialoguePortrait);
+    }
+  }
+
+  advanceDialogue() {
+    this.dialogueIndex++;
+    if (this.dialogueIndex < this.dialogueLines.length) {
+      this.dialogueText.setText(this.dialogueLines[this.dialogueIndex]);
+      this.sfx.play('dialogue');
+    } else {
+      this.closeDialogue();
+    }
+  }
+
+  closeDialogue() {
+    this.dialogueContainer.setVisible(false);
+    this.inDialogue = false;
+    if (this.dialoguePortrait) {
+      this.dialoguePortrait.destroy();
+      this.dialoguePortrait = null;
+    }
+    if (this.dialogueCallback) {
+      this.dialogueCallback();
+      this.dialogueCallback = null;
+    }
+  }
+
+  // --- World building ---
+  buildWorld(map) {
+    const ts = map.tileSize;
+
+    // Floor rendering
+    if (map.floorTile === 'cave-floor') {
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          this.add.image(col * ts, row * ts, 'cave-floor').setOrigin(0, 0);
+        }
+      }
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x3a2a1a)
+                .setDepth(0);
+            }
+          }
+        }
+      }
+    } else if (map.floorTile === 'sand-floor') {
+      // Desert temple sand floor
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          const shade = ((row + col) % 2 === 0) ? 0xddcc88 : 0xd4c080;
+          this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, shade).setDepth(0);
+        }
+      }
+      // Sandstone walls
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x8b7355).setDepth(0);
+            }
+          }
+        }
+      }
+    } else if (map.floorTile === 'wood-floor') {
+      // Interior wood floor
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          this.add.image(col * ts, row * ts, 'wood-floor', 0).setOrigin(0, 0);
+        }
+      }
+      // Draw walls using colored rectangles
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x5c3a1e)
+                .setDepth(0);
+            }
+          }
+        }
+      }
+    } else if (map.layers.ground) {
+      const tileTextures = ['grass-middle', 'water-middle', 'path-middle'];
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          const tileId = map.layers.ground[row]?.[col] ?? 0;
+          const texKey = tileTextures[tileId] || 'grass-middle';
+          this.add.image(col * ts, row * ts, texKey).setOrigin(0, 0);
+        }
+      }
+    } else {
+      const grassTex = this.textures.get('grass-middle');
+      const gw = grassTex.getSourceImage().width;
+      const gh = grassTex.getSourceImage().height;
+      for (let x = 0; x < this.worldWidth; x += gw) {
+        for (let y = 0; y < this.worldHeight; y += gh) {
+          this.add.image(x, y, 'grass-middle').setOrigin(0, 0);
+        }
+      }
+    }
+
+    this.obstacles = this.physics.add.staticGroup();
+
+    if (map.layers.collision) {
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          if (map.layers.collision[row]?.[col] === 1) {
+            const block = this.obstacles.create(col * ts + ts / 2, row * ts + ts / 2, null);
+            block.setVisible(false);
+            block.body.setSize(ts, ts);
+          }
+        }
+      }
+    }
+
+    // Object configs
+    const objectConfigs = {
+      'oak-tree': { texture: 'oak-tree', bodyW: 20, bodyH: 12 },
+      'oak-tree-small': { texture: 'oak-tree-small', bodyW: 14, bodyH: 8 },
+      'house-wood': { texture: 'house-wood', bodyW: -8, bodyH: 20 },
+      'chest': { texture: 'chest', bodyW: 14, bodyH: 8 },
+    };
+
+    for (const obj of (map.objects || [])) {
+      const cfg = objectConfigs[obj.type];
+      if (!cfg) continue;
+
+      const sprite = this.add.image(obj.x, obj.y, cfg.texture)
+        .setOrigin(0.5, 1.0)
+        .setDepth(obj.y);
+
+      const bw = cfg.bodyW < 0 ? sprite.width + cfg.bodyW : cfg.bodyW;
+      const zone = this.add.zone(obj.x, obj.y - cfg.bodyH / 2, bw, cfg.bodyH);
+      this.obstacles.add(zone);
+    }
+
+    // Environmental decorations (overworld only)
+    if (this.isOverworld) {
+      this.decorateWorld(map);
+    }
+
+    // Interior furniture
+    if (map.furniture) {
+      this.decorateInterior(map);
+    }
+
+    // Door triggers
+    this.doorZones = this.physics.add.staticGroup();
+    for (const door of (map.doors || [])) {
+      const zone = this.add.zone(
+        door.x + door.width / 2,
+        door.y + door.height / 2,
+        door.width,
+        door.height
+      );
+      this.physics.add.existing(zone, true);
+      zone.doorData = door;
+      this.doorZones.add(zone);
+    }
+  }
+
+  decorateInterior(map) {
+    for (const item of (map.furniture || [])) {
+      if (item.type === 'bed') {
+        // Simple colored rectangles for furniture
+        const bed = this.add.rectangle(item.x, item.y, 24, 36, 0x884422);
+        bed.setDepth(item.y);
+        const pillow = this.add.rectangle(item.x, item.y - 12, 18, 8, 0xdddddd);
+        pillow.setDepth(item.y + 1);
+        const blanket = this.add.rectangle(item.x, item.y + 6, 20, 16, 0x4466aa);
+        blanket.setDepth(item.y + 1);
+        // Collision
+        const zone = this.add.zone(item.x, item.y, 24, 36);
+        this.obstacles.add(zone);
+      } else if (item.type === 'counter') {
+        // Shop/inn counter
+        const counter = this.add.rectangle(item.x, item.y, 64, 14, 0x774422);
+        counter.setDepth(item.y);
+        const top = this.add.rectangle(item.x, item.y - 3, 66, 10, 0x996633);
+        top.setDepth(item.y + 1);
+        const zone = this.add.zone(item.x, item.y, 64, 14);
+        this.obstacles.add(zone);
+      } else if (item.type === 'table') {
+        const table = this.add.rectangle(item.x, item.y, 28, 20, 0x996633);
+        table.setDepth(item.y);
+        const top = this.add.rectangle(item.x, item.y - 2, 30, 16, 0xaa7744);
+        top.setDepth(item.y + 1);
+        const zone = this.add.zone(item.x, item.y, 28, 20);
+        this.obstacles.add(zone);
+      }
+    }
+  }
+
+  spawnNPCs() {
+    // Farmer Bob - skeleton quest + delivery quest
+    const bob = new NPC(this, 460, 120, 'farmer-bob', {
+      id: 'farmer_bob',
+      name: 'Farmer Bob',
+      questId: 'skeleton_hunt',
+      idleAnim: 'npc-bob-idle-down',
+      wanders: true,
+      speed: 10,
+      wanderRadius: 30,
+      wanderAnims: { down: 'npc-bob-walk-down', right: 'npc-bob-walk-right', up: 'npc-bob-walk-up' },
+      schedule: [
+        { time: 0, x: 500, y: 85 },    // night: near house
+        { time: 0.3, x: 460, y: 120 },  // morning: fields
+        { time: 0.65, x: 480, y: 100 }, // afternoon: near house
+        { time: 0.8, x: 500, y: 85 },   // evening: home
+      ],
+    });
+    this.npcs.add(bob);
+
+    // Farmer Buba - chicken quest
+    const buba = new NPC(this, 180, 180, 'farmer-buba', {
+      id: 'farmer_buba',
+      name: 'Farmer Buba',
+      questId: 'chicken_roundup',
+      idleAnim: 'npc-buba-idle-down',
+      wanders: true,
+      speed: 10,
+      wanderRadius: 35,
+      wanderAnims: { down: 'npc-buba-walk-down', right: 'npc-buba-walk-right', up: 'npc-buba-walk-up' },
+    });
+    this.npcs.add(buba);
+
+    // Chef Chloe - delivery recipient, wanders near pond
+    const chloe = new NPC(this, 520, 320, 'chef-chloe', {
+      id: 'chef_chloe',
+      name: 'Chef Chloe',
+      idleAnim: 'npc-chloe-idle-down',
+      wanders: true,
+      speed: 8,
+      wanderRadius: 30,
+      wanderAnims: { down: 'npc-chloe-walk-down', right: 'npc-chloe-walk-right', up: 'npc-chloe-walk-up' },
+      dialogueLines: ['I love cooking with\nfresh ingredients!', 'The pond has the best\nwater for my recipes!'],
+      schedule: [
+        { time: 0, x: 300, y: 480 },    // night: near shop
+        { time: 0.3, x: 520, y: 320 },  // morning: by pond
+        { time: 0.65, x: 400, y: 400 }, // afternoon: center
+        { time: 0.8, x: 300, y: 480 },  // evening: shop
+      ],
+    });
+    this.npcs.add(chloe);
+
+    // Fisherman Fin - pond quest, stationary by pond
+    const fin = new NPC(this, 580, 310, 'fisherman-fin', {
+      id: 'fisherman_fin',
+      name: 'Fisherman Fin',
+      questId: 'explore_pond',
+      idleAnim: 'npc-fin-idle-down',
+    });
+    this.npcs.add(fin);
+
+    // Lumberjack Jack - slime quest, wanders in woods
+    const jack = new NPC(this, 350, 350, 'lumberjack-jack', {
+      id: 'lumberjack_jack',
+      name: 'Lumberjack Jack',
+      questId: 'slime_cleanup',
+      idleAnim: 'npc-jack-idle-down',
+      wanders: true,
+      speed: 14,
+      wanderRadius: 50,
+      wanderAnims: { down: 'npc-jack-walk-down', right: 'npc-jack-walk-right', up: 'npc-jack-walk-up' },
+      schedule: [
+        { time: 0, x: 720, y: 265 },    // night: near inn
+        { time: 0.3, x: 350, y: 350 },  // morning: forest
+        { time: 0.5, x: 200, y: 300 },  // midday: west woods
+        { time: 0.75, x: 720, y: 265 }, // dusk: inn
+      ],
+    });
+    this.npcs.add(jack);
+
+    // Miner Mike - cave boss quest, wanders east
+    const mike = new NPC(this, 680, 250, 'miner-mike', {
+      id: 'miner_mike',
+      name: 'Miner Mike',
+      questId: 'clear_cave',
+      idleAnim: 'npc-mike-idle-down',
+      wanders: true,
+      speed: 10,
+      wanderRadius: 40,
+      wanderAnims: { down: 'npc-mike-walk-down', right: 'npc-mike-walk-right', up: 'npc-mike-walk-up' },
+    });
+    this.npcs.add(mike);
+  }
+
+  spawnInteriorNPCs(npcDefs) {
+    for (const def of npcDefs) {
+      // Build idle anim name from texture
+      const texBase = def.texture.replace('farmer-', 'npc-').replace('chef-', 'npc-').replace('fisherman-', 'npc-').replace('lumberjack-', 'npc-').replace('miner-', 'npc-');
+      const shortName = def.texture.split('-')[1] || def.texture;
+      const idleAnim = `npc-${shortName}-idle-down`;
+
+      const npc = new NPC(this, def.x, def.y, def.texture, {
+        id: def.id,
+        name: def.name,
+        idleAnim: idleAnim,
+        dialogueLines: def.role === 'shop'
+          ? ['Welcome to my shop!\nPress 1-3 to buy!']
+          : ['Welcome to the inn!\nRest and recover!'],
+      });
+      npc.role = def.role;
+      this.npcs.add(npc);
+    }
+  }
+
+  spawnEnemies() {
+    // Store spawn data for respawning
+    this.enemySpawns = [];
+    this.respawnQueue = [];
+
+    const skeletonPositions = [
+      { x: 400, y: 300 },
+      { x: 600, y: 200 },
+      { x: 200, y: 400 },
+      { x: 650, y: 350 },
+      { x: 350, y: 500 },
+      { x: 100, y: 250 },
+      { x: 700, y: 450 },
+    ];
+    for (const pos of skeletonPositions) {
+      this.enemySpawns.push({ ...pos, type: 'skeleton' });
+      this.spawnSkeleton(pos.x, pos.y);
+    }
+
+    const slimePositions = [
+      { x: 300, y: 350 },
+      { x: 450, y: 400 },
+      { x: 150, y: 200 },
+      { x: 650, y: 450 },
+    ];
+    for (const pos of slimePositions) {
+      this.enemySpawns.push({ ...pos, type: 'slime' });
+      this.spawnSlime(pos.x, pos.y);
+    }
+  }
+
+  spawnSkeleton(x, y) {
+    const skel = new Enemy(this, x, y, 'skeleton', {
+      health: 3,
+      speed: 35,
+      idleAnim: 'skeleton-idle-down',
+      enemyType: 'skeleton',
+    });
+    skel.spawnX = x;
+    skel.spawnY = y;
+    this.enemies.add(skel);
+    return skel;
+  }
+
+  spawnSlime(x, y) {
+    const slime = new Slime(this, x, y);
+    slime.spawnX = x;
+    slime.spawnY = y;
+    this.enemies.add(slime);
+    return slime;
+  }
+
+  queueRespawn(spawnData) {
+    this.respawnQueue.push({
+      ...spawnData,
+      timer: 60000, // 60 seconds
+    });
+  }
+
+  spawnMapEnemies(enemyList) {
+    for (const e of enemyList) {
+      if (e.type === 'bat') {
+        const bat = new Bat(this, e.x, e.y);
+        this.enemies.add(bat);
+      } else if (e.type === 'skeleton') {
+        this.spawnSkeleton(e.x, e.y);
+      } else if (e.type === 'slime') {
+        this.spawnSlime(e.x, e.y);
+      } else if (e.type === 'scorpion') {
+        this.spawnScorpion(e.x, e.y);
+      }
+    }
+  }
+
+  spawnBoss(bossType) {
+    const cx = this.worldWidth / 2;
+    const cy = this.worldHeight * 0.35;
+    if (bossType === 'pharaoh') {
+      this.boss = new Pharaoh(this, cx, cy);
+    } else {
+      this.boss = new SkeletonKing(this, cx, cy);
+    }
+    this.enemies.add(this.boss);
+  }
+
+  spawnScorpion(x, y) {
+    const scorpion = new Scorpion(this, x, y);
+    this.enemies.add(scorpion);
+    return scorpion;
+  }
+
+  spawnChickens() {
+    const chickenPositions = [
+      { x: 220, y: 220 },
+      { x: 160, y: 260 },
+      { x: 280, y: 200 },
+      { x: 240, y: 280 },
+      { x: 130, y: 170 },
+      { x: 300, y: 250 },
+    ];
+    for (const pos of chickenPositions) {
+      const chicken = new Chicken(this, pos.x, pos.y);
+      this.chickens.add(chicken);
+    }
+  }
+
+  handleChickenCollect(player, chicken) {
+    if (chicken.collected) return;
+
+    const quest = this.questManager.getQuest('chicken_roundup');
+    if (!quest || quest.state !== 'active') return;
+
+    if (chicken.collect()) {
+      this.sfx.play('chickenCollect');
+      const updated = this.questManager.trackEvent('collect', { target: 'chicken' });
+      if (updated) {
+        this.updateQuestTracker();
+      }
+    }
+  }
+
+  spawnUnicorns() {
+    // Rare — only 2 unicorns on the whole map
+    const positions = [
+      { x: 650, y: 500 },
+      { x: 120, y: 380 },
+    ];
+    for (const pos of positions) {
+      const unicorn = new Unicorn(this, pos.x, pos.y);
+      this.unicorns.add(unicorn);
+    }
+  }
+
+  spawnFairies() {
+    // Near pond and forest areas
+    const positions = [
+      { x: 540, y: 280, color: 0 },
+      { x: 580, y: 340, color: 1 },
+      { x: 160, y: 290, color: 2 },
+      { x: 400, y: 430, color: 3 },
+      { x: 300, y: 160, color: 0 },
+    ];
+    for (const pos of positions) {
+      const fairy = new Fairy(this, pos.x, pos.y, pos.color);
+      this.fairies.add(fairy);
+    }
+  }
+
+  spawnGhosts() {
+    // Ghosts spawn positions — they only become active at night
+    this._ghostSpawns = [
+      { x: 350, y: 420 },
+      { x: 550, y: 180 },
+      { x: 680, y: 400 },
+    ];
+    this._ghostsSpawned = false;
+  }
+
+  spawnChests() {
+    const positions = this.isOverworld
+      ? [
+          { x: 440, y: 480 }, { x: 720, y: 140 }, { x: 100, y: 420 },
+          { x: 620, y: 500 }, { x: 280, y: 100 },
+        ]
+      : this.isCave
+      ? [{ x: 240, y: 100 }, { x: 60, y: 180 }]
+      : this.isTemple
+      ? [{ x: 60, y: 60 }, { x: 260, y: 60 }]
+      : [];
+
+    // Check saved opened chests
+    const opened = this.savedOpenedChests || [];
+    for (const pos of positions) {
+      const chest = new Chest(this, pos.x, pos.y);
+      const id = chest.chestId;
+      if (opened.includes(id)) {
+        chest.opened = true;
+        chest.setTint(0x888888);
+        chest.setAlpha(0.6);
+        chest.prompt.destroy();
+      }
+      this.chests.add(chest);
+    }
+  }
+
+  handleChestOpen() {
+    let nearest = null;
+    let nearestDist = 30;
+    this.chests.getChildren().forEach((c) => {
+      if (c.opened) return;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, c.x, c.y - 8);
+      if (d < nearestDist) { nearest = c; nearestDist = d; }
+    });
+    if (!nearest) return false;
+
+    const loot = nearest.open(this);
+    if (!loot) return false;
+
+    this.sfx.play('pickup');
+    this.cameras.main.shake(50, 0.004);
+
+    if (loot.type === 'gold') {
+      this.addGold(loot.amount);
+    } else if (loot.type === 'potion') {
+      this.inventory.addItem(loot.id, 1);
+      this.events.emit('inventory-changed', this.inventory.slots);
+    } else if (loot.type === 'xp') {
+      this.addXP(loot.amount);
+    }
+
+    this.showNotification(`Chest: ${loot.label}`);
+    return true;
+  }
+
+  handleUnicornContact(player, unicorn) {
+    if (player.health >= player.maxHealth) return;
+    if (!unicorn.canHeal) return;
+
+    const healed = unicorn.tryHeal(player);
+    if (healed) {
+      this.events.emit('player-health-changed', player.health, player.maxHealth);
+      this.sfx.play('unicornHeal');
+      this.showNotification(`Unicorn healed you! +${healed} HP`);
+    }
+  }
+
+  handleFairyContact(player, fairy) {
+    if (fairy.buffGiven) return;
+    const result = fairy.giveBuff(player, this);
+    if (result) {
+      this.sfx.play('fairyBuff');
+      this.showNotification(result.message);
+    }
+  }
+
+  handleSwordHit(hitbox, enemy) {
+    if (!enemy.takeDamage) return;
+    if (enemy.health <= 0) return;
+
+    const ex = enemy.x;
+    const ey = enemy.y;
+
+    const baseDmg = this.player.attackPower || 1;
+    const equipBonus = this.equipment ? this.equipment.getAttackBonus() : 0;
+    const dmg = baseDmg + equipBonus + (this._fairyAttackBuff ? 1 : 0);
+    enemy.takeDamage(dmg, this.player.x, this.player.y);
+
+    // Combat juice - stronger feedback for charged/combo hits
+    this.sfx.play('hit');
+    const shakeIntensity = dmg > 1 ? 0.008 : 0.004;
+    this.cameras.main.shake(50, shakeIntensity);
+    this.showDamageNumber(ex, ey - 8, dmg);
+    this.hitFreeze(dmg > 1 ? 60 : 40);
+
+    if (enemy.health <= 0) {
+      // Boss handles its own death sequence
+      if (enemy === this.boss) return;
+
+      this.sfx.play('enemyDeath');
+      this.spawnDeathEffect(ex, ey);
+      this.spawnLootDrop(ex, ey);
+
+      if (enemy.enemyType) {
+        const updated = this.questManager.trackEvent('kill', { target: enemy.enemyType });
+        if (updated) {
+          this.updateQuestTracker();
+        }
+      }
+
+      // Gold + XP reward
+      const rewards = { skeleton: { gold: 5, xp: 15 }, slime: { gold: 2, xp: 8 }, bat: { gold: 3, xp: 10 }, ghost: { gold: 8, xp: 25 }, scorpion: { gold: 6, xp: 18 } };
+      const reward = rewards[enemy.enemyType] || { gold: 3, xp: 10 };
+      this.addGold(reward.gold);
+      this.addXP(reward.xp);
+
+      // Queue respawn
+      if (enemy.spawnX !== undefined && this.respawnQueue) {
+        const type = enemy.enemyType === 'skeleton' ? 'skeleton' : 'slime';
+        this.queueRespawn({ x: enemy.spawnX, y: enemy.spawnY, type });
+      }
+    }
+  }
+
+  handleEnemyContact(player, enemy) {
+    if (enemy.damage && !player.invulnerable) {
+      const nightBonus = this.isNight ? 1 : 0;
+      player.takeDamage(enemy.damage + nightBonus);
+      this.sfx.play('playerHurt');
+      this.cameras.main.shake(80, 0.006);
+    }
+  }
+
+  handleDoor(player, zone) {
+    if (this._doorCooldown) return;
+    this._doorCooldown = true;
+
+    const door = zone.doorData;
+    this.player.setVelocity(0, 0);
+    this.sfx.play('doorEnter');
+
+    // Fade out music before transition
+    if (this.music) this.music.fadeOut(0.3);
+
+    const targetMap = MAPS[door.targetMap];
+    if (!targetMap) {
+      // Fallback: teleport within same map
+      this._irisWipeOut(() => {
+        this.player.setPosition(door.targetX, door.targetY);
+        this._irisWipeIn();
+        this.time.delayedCall(500, () => {
+          this._doorCooldown = false;
+        });
+      });
+      return;
+    }
+
+    // Save quest state and transition to new map
+    const questState = this.questManager.saveState();
+    const playerHealth = this.player.health;
+
+    this._irisWipeOut(() => {
+      this.scene.stop('UI');
+      this.scene.restart({
+        mapData: {
+          ...targetMap,
+          playerSpawn: { x: door.targetX, y: door.targetY },
+        },
+        questState: questState,
+        playerHealth: playerHealth,
+        gold: this.gold,
+        xp: this.xp,
+        level: this.level,
+        inventory: this.inventory.saveState(),
+        dayTime: this.dayTime,
+        equipment: this.equipment.saveState(),
+        openedChests: this._getOpenedChests(),
+        trackedQuestId: this.trackedQuestId,
+      });
+    });
+  }
+
+  _irisWipeOut(onComplete) {
+    // Smooth wipe: brief freeze + fast fade
+    this.cameras.main.flash(100, 255, 255, 255, false, (cam, progress) => {
+      if (progress >= 0.5 && !this._wipeTriggered) {
+        this._wipeTriggered = true;
+        this.cameras.main.fadeOut(200, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          this._wipeTriggered = false;
+          if (onComplete) onComplete();
+        });
+      }
+    });
+  }
+
+  _irisWipeIn() {
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+  }
+
+  handleNPCInteraction() {
+    if (this.inDialogue) return;
+
+    let nearestNPC = null;
+    this.npcs.getChildren().forEach((npc) => {
+      if (npc.canInteract) nearestNPC = npc;
+    });
+
+    if (!nearestNPC) return;
+
+    const name = nearestNPC.npcName;
+    const portrait = nearestNPC.texture.key;
+
+    // Shop NPC
+    if (nearestNPC.role === 'shop') {
+      this.openShopMenu(nearestNPC);
+      return;
+    }
+
+    // Inn NPC
+    if (nearestNPC.role === 'inn') {
+      this.handleInnInteraction(nearestNPC);
+      return;
+    }
+
+    // Check if this NPC is a turnIn target for a delivery quest
+    for (const quest of Object.values(this.questManager.quests)) {
+      if (quest.turnIn === nearestNPC.npcId && quest.state === 'active') {
+        this.showDialogue(quest.turnInDialogue, () => {
+          quest.progress = quest.objective.count;
+          quest.state = 'ready';
+          this.updateQuestTracker();
+          this.showNotification('Delivery Complete!');
+          this.sfx.play('questComplete');
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Normal quest/dialogue flow
+    const quest = nearestNPC.questId ? this.questManager.getQuest(nearestNPC.questId) : null;
+    const lines = nearestNPC.getDialogue(this.questManager, this);
+
+    // Check if Bob has another quest (special_delivery) after skeleton_hunt is done
+    if (nearestNPC.npcId === 'farmer_bob') {
+      const skeletonQuest = this.questManager.getQuest('skeleton_hunt');
+      const deliveryQuest = this.questManager.getQuest('special_delivery');
+      if (skeletonQuest && skeletonQuest.state === 'completed' && deliveryQuest && deliveryQuest.state === 'available') {
+        this.showDialogue(deliveryQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('special_delivery');
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + deliveryQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (deliveryQuest && (deliveryQuest.state === 'active' || deliveryQuest.state === 'ready')) {
+        const dLines = deliveryQuest.dialogue[deliveryQuest.state];
+        this.showDialogue(dLines, () => {
+          if (deliveryQuest.state === 'ready') {
+            this.giveQuestReward('special_delivery');
+            this.questManager.completeQuest('special_delivery');
+            this.updateQuestTracker();
+            this.showNotification('Quest Complete!');
+            this.sfx.play('questComplete');
+          }
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Miner Mike: chain clear_cave → clear_temple
+    if (nearestNPC.npcId === 'miner_mike') {
+      const caveQuest = this.questManager.getQuest('clear_cave');
+      const templeQuest = this.questManager.getQuest('clear_temple');
+      if (caveQuest && caveQuest.state === 'completed' && templeQuest && templeQuest.state === 'available') {
+        this.showDialogue(templeQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('clear_temple');
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + templeQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (templeQuest && (templeQuest.state === 'active' || templeQuest.state === 'ready')) {
+        const tLines = templeQuest.dialogue[templeQuest.state];
+        this.showDialogue(tLines, () => {
+          if (templeQuest.state === 'ready') {
+            this.giveQuestReward('clear_temple');
+            this.questManager.completeQuest('clear_temple');
+            this.updateQuestTracker();
+            this.showNotification('Quest Complete!');
+            this.sfx.play('questComplete');
+          }
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Fisherman Fin: chain explore_pond → catch_fish
+    if (nearestNPC.npcId === 'fisherman_fin') {
+      const pondQuest = this.questManager.getQuest('explore_pond');
+      const fishQuest = this.questManager.getQuest('catch_fish');
+      if (pondQuest && pondQuest.state === 'completed' && fishQuest && fishQuest.state === 'available') {
+        this.showDialogue(fishQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('catch_fish');
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + fishQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (fishQuest && (fishQuest.state === 'active' || fishQuest.state === 'ready')) {
+        const fLines = fishQuest.dialogue[fishQuest.state];
+        this.showDialogue(fLines, () => {
+          if (fishQuest.state === 'ready') {
+            this.giveQuestReward('catch_fish');
+            this.questManager.completeQuest('catch_fish');
+            this.updateQuestTracker();
+            this.showNotification('Quest Complete!');
+            this.sfx.play('questComplete');
+          }
+        }, name, portrait);
+        return;
+      }
+    }
+
+    this.showDialogue(lines, () => {
+      if (quest) {
+        if (quest.state === 'available') {
+          this.questManager.acceptQuest(quest.id);
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + quest.name);
+          this.sfx.play('questAccept');
+        } else if (quest.state === 'ready') {
+          this.giveQuestReward(quest.id);
+          this.questManager.completeQuest(quest.id);
+          this.updateQuestTracker();
+          this.showNotification('Quest Complete!');
+          this.sfx.play('questComplete');
+        }
+      }
+    }, name, portrait);
+  }
+
+  updateQuestTracker() {
+    const active = this.questManager.getActiveQuests();
+    if (active.length === 0) {
+      this.questTrackerText.setText('');
+      return;
+    }
+
+    // Show tracked quest, or first active if none tracked
+    let tracked = null;
+    if (this.trackedQuestId) {
+      tracked = active.find(q => q.id === this.trackedQuestId);
+    }
+    if (!tracked) {
+      tracked = active[0];
+      this.trackedQuestId = tracked.id;
+    }
+
+    let line;
+    if (tracked.state === 'ready') {
+      line = `${tracked.name} - Done!`;
+    } else {
+      line = `${tracked.name}\n${tracked.objective.description}: ${tracked.progress}/${tracked.objective.count}`;
+    }
+    this.questTrackerText.setText(line);
+  }
+
+  openPauseMenu() {
+    if (this._pauseOpen) return;
+    this._pauseOpen = true;
+    this.physics.pause();
+
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    this._pauseContainer = this.add.container(0, 0)
+      .setScrollFactor(0).setDepth(20000);
+
+    // Dark overlay
+    const overlay = this.add.rectangle(cx, cy, w, h, 0x000000, 0.65);
+    this._pauseContainer.add(overlay);
+
+    // Panel background
+    const panelW = w - 40;
+    const panelH = h - 30;
+    const panel = this.add.nineslice(
+      cx, cy, 'ui-frames', 'panel-gray',
+      panelW, panelH, 8, 8, 8, 8
+    );
+    this._pauseContainer.add(panel);
+
+    // Title
+    const title = this.add.text(cx, cy - panelH / 2 + 12, 'PAUSED', {
+      fontSize: '12px', fontFamily: 'CuteFantasy', color: '#3d2510',
+    }).setOrigin(0.5);
+    this._pauseContainer.add(title);
+
+    // Quest section
+    const active = this.questManager.getActiveQuests();
+    let yPos = cy - panelH / 2 + 30;
+
+    if (active.length > 0) {
+      const questHeader = this.add.text(cx, yPos, '-- Quests --', {
+        fontSize: '7px', fontFamily: 'CuteFantasy', color: '#5c3a1e',
+      }).setOrigin(0.5);
+      this._pauseContainer.add(questHeader);
+      yPos += 14;
+
+      this._pauseQuestIds = [];
+      const maxShown = Math.min(active.length, this.itemKeys.length);
+      active.slice(0, maxShown).forEach((q, i) => {
+        const isTracked = q.id === this.trackedQuestId;
+        const marker = isTracked ? '>' : ' ';
+        const statusStr = q.state === 'ready' ? ' [DONE!]' : `: ${q.progress}/${q.objective.count}`;
+
+        const qText = this.add.text(38, yPos, `${marker} ${i + 1}: ${q.name}${statusStr}`, {
+          fontSize: '7px', fontFamily: 'CuteFantasy',
+          color: isTracked ? '#2a1a08' : '#7a6a5a',
+        });
+        this._pauseContainer.add(qText);
+        this._pauseQuestIds.push(q.id);
+        yPos += 12;
+      });
+
+      const trackHint = this.add.text(cx, yPos + 4, 'Press 1-' + maxShown + ' to track quest', {
+        fontSize: '6px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
+      }).setOrigin(0.5);
+      this._pauseContainer.add(trackHint);
+      yPos += 18;
+    }
+
+    // Completed quests count
+    const allQuests = this.questManager.getAllQuests();
+    const completed = allQuests.filter(q => q.state === 'completed');
+    if (completed.length > 0) {
+      const compText = this.add.text(cx, yPos, `Completed: ${completed.length} quest${completed.length > 1 ? 's' : ''}`, {
+        fontSize: '6px', fontFamily: 'CuteFantasy', color: '#2d7a2d',
+      }).setOrigin(0.5);
+      this._pauseContainer.add(compText);
+      yPos += 16;
+    }
+
+    // Divider
+    const divider = this.add.rectangle(cx, yPos, panelW - 20, 1, 0x8b6d4a);
+    this._pauseContainer.add(divider);
+    yPos += 12;
+
+    // Options
+    const resumeText = this.add.text(cx, yPos, 'ESC / ENTER: Resume', {
+      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#2a1a08',
+    }).setOrigin(0.5);
+    this._pauseContainer.add(resumeText);
+    yPos += 14;
+
+    const saveText = this.add.text(cx, yPos, 'S: Save & Quit to Title', {
+      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#7a6a5a',
+    }).setOrigin(0.5);
+    this._pauseContainer.add(saveText);
+
+    // Pulse resume text
+    this.tweens.add({
+      targets: resumeText,
+      alpha: { from: 1, to: 0.4 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+    });
+
+  }
+
+  closePauseMenu() {
+    if (!this._pauseOpen) return;
+    this._pauseOpen = false;
+    this.physics.resume();
+
+    if (this._pauseContainer) {
+      this._pauseContainer.destroy();
+      this._pauseContainer = null;
+    }
+    this._pauseQuestIds = null;
+  }
+
+  _handlePauseInput() {
+    // Close with ESC or ENTER or E
+    if (Phaser.Input.Keyboard.JustDown(this.escKey) ||
+        Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.closePauseMenu();
+      return;
+    }
+
+    // Save & quit (S key - reuse player's WASD down key)
+    if (Phaser.Input.Keyboard.JustDown(this.player.wasd.down)) {
+      SaveManager.save(this);
+      this.closePauseMenu();
+      this.scene.stop('UI');
+      this.scene.start('Title');
+      return;
+    }
+
+    // Quest tracking selection (reuse item keys 1-3)
+    if (this._pauseQuestIds) {
+      for (let i = 0; i < this._pauseQuestIds.length; i++) {
+        if (i < this.itemKeys.length && Phaser.Input.Keyboard.JustDown(this.itemKeys[i])) {
+          this.trackedQuestId = this._pauseQuestIds[i];
+          this.updateQuestTracker();
+          // Rebuild pause menu to reflect new selection
+          this.closePauseMenu();
+          this.openPauseMenu();
+          return;
+        }
+      }
+    }
+  }
+
+  checkVictory() {
+    const cave = this.questManager.getQuest('clear_cave');
+    const temple = this.questManager.getQuest('clear_temple');
+    const caveDone = cave && (cave.state === 'completed' || cave.state === 'ready');
+    const templeDone = temple && (temple.state === 'completed' || temple.state === 'ready');
+    if (caveDone && templeDone) {
+      // Both bosses defeated - trigger victory after delay
+      this.time.delayedCall(3000, () => {
+        const questsCompleted = this.questManager.getAllQuests()
+          .filter(q => q.state === 'completed' || q.state === 'ready').length;
+        this.cameras.main.fadeOut(1500, 255, 255, 255);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          this.scene.stop('UI');
+          this.scene.start('Victory', {
+            level: this.level,
+            gold: this.gold,
+            questsCompleted,
+          });
+        });
+      });
+    }
+  }
+
+  showNotification(msg) {
+    const w = this.cameras.main.width;
+
+    // Panel background for notification
+    const textMeasure = msg.length * 4 + 20;
+    const panelW = Math.min(Math.max(textMeasure, 60), w - 20);
+    const panel = this.add.nineslice(
+      w / 2, 30, 'ui-frames', 'panel-orange',
+      panelW, 18, 6, 6, 6, 6
+    ).setScrollFactor(0).setDepth(9998);
+
+    const notif = this.add.text(w / 2, 30, msg, {
+      fontSize: '7px',
+      fontFamily: 'CuteFantasy',
+      color: '#3d2510',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
+
+    this.tweens.add({
+      targets: [notif, panel],
+      alpha: 0,
+      y: '-=10',
+      duration: 2500,
+      ease: 'Power2',
+      onComplete: () => { notif.destroy(); panel.destroy(); },
+    });
+  }
+
+  giveQuestReward(questId) {
+    const quest = this.questManager.getQuest(questId);
+    if (quest && quest.reward) {
+      if (quest.reward.gold) this.addGold(quest.reward.gold);
+      if (quest.reward.xp) this.addXP(quest.reward.xp);
+    }
+    // Auto-save on quest milestone
+    this.time.delayedCall(100, () => SaveManager.save(this));
+  }
+
+  // --- Gold & XP ---
+  addGold(amount) {
+    this.gold += amount;
+    this.events.emit('gold-changed', this.gold);
+    if (amount > 0) {
+      this.showFloatingText(this.player.x, this.player.y - 12, `+${amount}g`, '#ffdd00');
+    }
+  }
+
+  addXP(amount) {
+    this.xp += amount;
+    while (this.xp >= this.xpToNext) {
+      this.xp -= this.xpToNext;
+      this.level++;
+      this.xpToNext = this.level * 100;
+
+      // Stat gains on level-up
+      let bonusMsg = '';
+      if (this.level % 2 === 0) {
+        this.player.maxHealth += 2;
+        this.player.health = Math.min(this.player.health + 2, this.player.maxHealth);
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+        bonusMsg += ' +HP';
+      }
+      if (this.level % 3 === 0) {
+        this.player.speed = Math.round(this.player.speed * 1.05);
+        bonusMsg += ' +SPD';
+      }
+
+      this.showNotification(`Level Up! Lv.${this.level}${bonusMsg}`);
+      this.sfx.play('questComplete');
+    }
+    this.events.emit('xp-changed', this.xp, this.xpToNext, this.level);
+  }
+
+  // --- Inventory ---
+  useItem(slotIndex) {
+    const itemId = this.inventory.useItem(slotIndex);
+    if (!itemId) return;
+
+    this.sfx.play('potionUse');
+    this.events.emit('inventory-changed', this.inventory.slots);
+
+    if (itemId === 'health_potion') {
+      const healed = Math.min(2, this.player.maxHealth - this.player.health);
+      if (healed <= 0) {
+        // Refund - inventory was already decremented, re-add
+        this.inventory.addItem('health_potion', 1);
+        this.events.emit('inventory-changed', this.inventory.slots);
+        return;
+      }
+      this.player.health = Math.min(this.player.health + 2, this.player.maxHealth);
+      this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      this.showPotionEffect(0xe74c3c);
+      this.showNotification('+2 HP');
+    } else if (itemId === 'speed_potion') {
+      const originalSpeed = this.player.speed;
+      this.player.speed = Math.round(originalSpeed * 1.5);
+      this.showPotionEffect(0x3498db);
+      this.showNotification('Speed Boost!');
+      this.time.delayedCall(8000, () => {
+        this.player.speed = originalSpeed;
+      });
+    } else if (itemId === 'shield_potion') {
+      this.player.invulnerable = true;
+      this.player.invulnerableTimer = 5000;
+      this.showPotionEffect(0xf1c40f);
+      this.showNotification('Shield Active!');
+    }
+  }
+
+  showPotionEffect(color) {
+    // Ring burst around player
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const particle = this.add.circle(this.player.x, this.player.y, 2, color, 0.8);
+      particle.setDepth(9999);
+      this.tweens.add({
+        targets: particle,
+        x: this.player.x + Math.cos(angle) * 18,
+        y: this.player.y + Math.sin(angle) * 18,
+        alpha: 0,
+        scale: 0.3,
+        duration: 400,
+        ease: 'Power2',
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
+  // --- Day/Night ---
+  _updateDayNight() {
+    // dayTime: 0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk
+    const t = this.dayTime;
+    let alpha, r, g, b;
+
+    if (t < 0.2) {
+      // Night (midnight to pre-dawn)
+      alpha = 0.45;
+      r = 0x10; g = 0x10; b = 0x40;
+    } else if (t < 0.3) {
+      // Dawn transition
+      const p = (t - 0.2) / 0.1;
+      alpha = 0.45 * (1 - p);
+      r = Math.round(0x10 + (0xff - 0x10) * p);
+      g = Math.round(0x10 + (0xbb - 0x10) * p);
+      b = Math.round(0x40 + (0x88 - 0x40) * p);
+    } else if (t < 0.65) {
+      // Day (morning to afternoon)
+      alpha = 0;
+      r = 0xff; g = 0xff; b = 0xff;
+    } else if (t < 0.75) {
+      // Dusk transition
+      const p = (t - 0.65) / 0.1;
+      alpha = 0.35 * p;
+      r = Math.round(0xff - (0xff - 0x80) * p);
+      g = Math.round(0xff - (0xff - 0x50) * p);
+      b = Math.round(0xff - (0xff - 0x30) * p);
+    } else if (t < 0.85) {
+      // Sunset to night
+      const p = (t - 0.75) / 0.1;
+      alpha = 0.35 + 0.1 * p;
+      r = Math.round(0x80 - (0x80 - 0x10) * p);
+      g = Math.round(0x50 - (0x50 - 0x10) * p);
+      b = Math.round(0x30 + (0x40 - 0x30) * p);
+    } else {
+      // Deep night
+      alpha = 0.45;
+      r = 0x10; g = 0x10; b = 0x40;
+    }
+
+    const color = (r << 16) | (g << 8) | b;
+    this.dayOverlay.setFillStyle(color, alpha);
+
+    // Track night state for enemy damage bonus
+    const wasNight = this.isNight;
+    this.isNight = t < 0.2 || t >= 0.8;
+
+    if (this.isNight && !wasNight) {
+      this.showNotification('Night falls... enemies grow stronger');
+    } else if (!this.isNight && wasNight) {
+      this.showNotification('Dawn breaks');
+    }
+
+    // Emit time label for UI
+    let timeLabel;
+    if (t < 0.2) timeLabel = 'Night';
+    else if (t < 0.3) timeLabel = 'Dawn';
+    else if (t < 0.5) timeLabel = 'Morning';
+    else if (t < 0.65) timeLabel = 'Afternoon';
+    else if (t < 0.75) timeLabel = 'Dusk';
+    else if (t < 0.85) timeLabel = 'Evening';
+    else timeLabel = 'Night';
+    this.events.emit('time-changed', timeLabel);
+  }
+
+  // --- Shop & Inn ---
+  openShopMenu(npc) {
+    // Build shop inventory: potions + next equipment tier
+    const shopItems = [
+      { id: 'health_potion', name: 'Health Potion', price: 15, color: '#e74c3c', type: 'potion' },
+      { id: 'speed_potion', name: 'Speed Potion', price: 30, color: '#3498db', type: 'potion' },
+      { id: 'shield_potion', name: 'Shield Potion', price: 50, color: '#f1c40f', type: 'potion' },
+    ];
+
+    // Show equipment upgrades the player doesn't own yet
+    const weaponTiers = ['wooden_sword', 'iron_sword', 'fire_sword'];
+    const armorTiers = ['cloth_armor', 'leather_armor', 'iron_armor'];
+    const currentWeaponIdx = weaponTiers.indexOf(this.equipment.weapon);
+    const currentArmorIdx = armorTiers.indexOf(this.equipment.armor);
+    if (currentWeaponIdx < weaponTiers.length - 1) {
+      const next = EQUIPMENT[weaponTiers[currentWeaponIdx + 1]];
+      shopItems.push({ id: next.id, name: next.name, price: next.price, color: next.color, type: 'equip', desc: next.description });
+    }
+    if (currentArmorIdx < armorTiers.length - 1) {
+      const next = EQUIPMENT[armorTiers[currentArmorIdx + 1]];
+      shopItems.push({ id: next.id, name: next.name, price: next.price, color: next.color, type: 'equip', desc: next.description });
+    }
+
+    this.inDialogue = true;
+    this.player.setVelocity(0, 0);
+
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const itemCount = Math.min(shopItems.length, 5);
+    const boxW = w - 24;
+    const boxH = 28 + itemCount * 14;
+    const boxX = w / 2;
+    const boxY = h - boxH / 2 - 8;
+
+    this.shopContainer = this.add.container(0, 0)
+      .setScrollFactor(0).setDepth(10000);
+
+    const bg = this.add.nineslice(
+      boxX, boxY, 'ui-frames', 'panel-yellow',
+      boxW, boxH, 8, 8, 8, 8
+    );
+    this.shopContainer.add(bg);
+
+    const title = this.add.text(boxX, boxY - boxH / 2 + 6, `${npc.npcName}'s Shop  (Gold: ${this.gold})`, {
+      fontSize: '7px', fontFamily: 'CuteFantasy', color: '#3d2510',
+    }).setOrigin(0.5, 0);
+    this.shopContainer.add(title);
+
+    shopItems.forEach((item, i) => {
+      const y = boxY - boxH / 2 + 20 + i * 14;
+      const prefix = i < 9 ? `${i + 1}` : '*';
+      const suffix = item.desc ? ` (${item.desc})` : '';
+      const label = this.add.text(20, y, `${prefix}: ${item.name}${suffix}`, {
+        fontSize: '6px', fontFamily: 'CuteFantasy', color: '#2a1a08',
+      }).setScrollFactor(0);
+      const price = this.add.text(w - 20, y, `${item.price}g`, {
+        fontSize: '6px', fontFamily: 'CuteFantasy',
+        color: this.gold >= item.price ? '#2a1a08' : '#999999',
+      }).setOrigin(1, 0).setScrollFactor(0);
+      this.shopContainer.add(label);
+      this.shopContainer.add(price);
+    });
+
+    const hint = this.add.text(boxX, boxY + boxH / 2 - 6, 'ESC to close', {
+      fontSize: '5px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
+    }).setOrigin(0.5, 1).setScrollFactor(0);
+    this.shopContainer.add(hint);
+
+    // Shop input handling
+    this._shopActive = true;
+    this._shopItems = shopItems;
+    this._shopNPC = npc;
+    this._shopEscKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+
+    // Add keys 4 and 5 for equipment slots
+    this._shopExtraKeys = [
+      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
+      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE),
+    ];
+  }
+
+  closeShop() {
+    if (this.shopContainer) {
+      this.shopContainer.destroy();
+      this.shopContainer = null;
+    }
+    this._shopActive = false;
+    this.inDialogue = false;
+  }
+
+  handleShopBuy(index) {
+    const item = this._shopItems[index];
+    if (!item) return;
+    if (this.gold < item.price) {
+      this.showNotification('Not enough gold!');
+      return;
+    }
+
+    if (item.type === 'equip') {
+      // Equipment purchase
+      const equip = EQUIPMENT[item.id];
+      if (!equip) return;
+      this.addGold(-item.price);
+      this.sfx.play('coinSpend');
+
+      const oldHPBonus = this.equipment.getHPBonus();
+      this.equipment.equip(item.id);
+      const newHPBonus = this.equipment.getHPBonus();
+
+      // Apply armor HP change
+      if (newHPBonus !== oldHPBonus) {
+        const diff = newHPBonus - oldHPBonus;
+        this.player.maxHealth += diff;
+        this.player.health = Math.min(this.player.health + Math.max(0, diff), this.player.maxHealth);
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      }
+
+      this.showNotification(`Equipped ${equip.name}!`);
+      this.closeShop();
+      this.openShopMenu(this._shopNPC);
+      return;
+    }
+
+    // Potion purchase
+    const added = this.inventory.addItem(item.id, 1);
+    if (added <= 0) {
+      this.showNotification('Inventory full!');
+      return;
+    }
+    this.addGold(-item.price);
+    this.sfx.play('coinSpend');
+    this.events.emit('inventory-changed', this.inventory.slots);
+    // Refresh shop display
+    this.closeShop();
+    this.openShopMenu(this._shopNPC);
+  }
+
+  handleInnInteraction(npc) {
+    const name = npc.npcName;
+    const portrait = npc.texture.key;
+    const cost = 10;
+
+    if (this.player.health >= this.player.maxHealth) {
+      this.showDialogue(
+        ['You look healthy already!\nNo need to rest.'],
+        null, name, portrait
+      );
+      return;
+    }
+
+    if (this.gold < cost) {
+      this.showDialogue(
+        [`A night's rest costs ${cost} gold.\nYou don't have enough...`],
+        null, name, portrait
+      );
+      return;
+    }
+
+    this.showDialogue(
+      [`Welcome! Rest for ${cost} gold?\nYou look like you need it!`, 'Sweet dreams...'],
+      () => {
+        this.addGold(-cost);
+        this.player.health = this.player.maxHealth;
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+        this.showNotification('Fully rested!');
+        this.sfx.play('potionUse');
+      }, name, portrait
+    );
+  }
+
+  _castMagic() {
+    this.player.mana -= this.player.magicCost;
+    this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+
+    const dirs = {
+      down: { x: 0, y: 1 },
+      up: { x: 0, y: -1 },
+      right: { x: 1, y: 0 },
+      left: { x: -1, y: 0 },
+    };
+    const d = dirs[this.player.direction];
+    const speed = 140;
+
+    // Create magic projectile
+    const proj = this.add.circle(this.player.x + d.x * 12, this.player.y + d.y * 12, 4, 0x4488ff, 0.9);
+    proj.setDepth(9999);
+    this.physics.add.existing(proj, false);
+    proj.body.setVelocity(d.x * speed, d.y * speed);
+    proj.body.setAllowGravity(false);
+    proj.damage = 2;
+
+    // Glow trail
+    const glow = this.add.circle(proj.x, proj.y, 6, 0x4488ff, 0.3);
+    glow.setDepth(9998);
+
+    // SFX
+    this.sfx.play('swordSwing');
+
+    // Update glow position
+    const trailTimer = this.time.addEvent({
+      delay: 16,
+      callback: () => {
+        if (!proj.active) { glow.destroy(); trailTimer.remove(); return; }
+        glow.setPosition(proj.x, proj.y);
+        // Trail particle
+        const trail = this.add.circle(proj.x, proj.y, 2, 0x4488ff, 0.4);
+        trail.setDepth(9997);
+        this.tweens.add({
+          targets: trail,
+          alpha: 0,
+          scale: 0,
+          duration: 200,
+          onComplete: () => trail.destroy(),
+        });
+      },
+      loop: true,
+    });
+
+    // Enemy collision
+    this.physics.add.overlap(proj, this.enemies, (p, enemy) => {
+      if (!enemy.takeDamage || enemy.health <= 0) return;
+      enemy.takeDamage(p.damage, this.player.x, this.player.y);
+      this.sfx.play('hit');
+      this.showDamageNumber(enemy.x, enemy.y - 8, p.damage);
+
+      // Impact burst
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const spark = this.add.circle(p.x, p.y, 2, 0x88bbff, 0.8);
+        spark.setDepth(9999);
+        this.tweens.add({
+          targets: spark,
+          x: p.x + Math.cos(angle) * 10,
+          y: p.y + Math.sin(angle) * 10,
+          alpha: 0,
+          duration: 150,
+          onComplete: () => spark.destroy(),
+        });
+      }
+
+      glow.destroy();
+      trailTimer.remove();
+      p.destroy();
+
+      // Check death
+      if (enemy.health <= 0 && enemy !== this.boss) {
+        this.sfx.play('enemyDeath');
+        this.spawnDeathEffect(enemy.x, enemy.y);
+        this.spawnLootDrop(enemy.x, enemy.y);
+        if (enemy.enemyType) {
+          const updated = this.questManager.trackEvent('kill', { target: enemy.enemyType });
+          if (updated) this.updateQuestTracker();
+        }
+        const rewards = { skeleton: { gold: 5, xp: 15 }, slime: { gold: 2, xp: 8 }, bat: { gold: 3, xp: 10 }, ghost: { gold: 8, xp: 25 }, scorpion: { gold: 6, xp: 18 } };
+        const reward = rewards[enemy.enemyType] || { gold: 3, xp: 10 };
+        this.addGold(reward.gold);
+        this.addXP(reward.xp);
+      }
+    });
+
+    // Destroy after distance
+    this.time.delayedCall(800, () => {
+      if (proj.active) {
+        glow.destroy();
+        trailTimer.remove();
+        proj.destroy();
+      }
+    });
+  }
+
+  _getOpenedChests() {
+    const ids = [...(this.savedOpenedChests || [])];
+    this.chests.getChildren().forEach((c) => {
+      if (c.opened && !ids.includes(c.chestId)) ids.push(c.chestId);
+    });
+    return ids;
+  }
+
+  // --- Paul the Wizard rescue ---
+  _paulRescue() {
+    if (this._paulRescueActive) return;
+    this._paulRescueActive = true;
+
+    // Freeze everything
+    this.physics.world.pause();
+    if (this.music) this.music.fadeOut(0.8);
+
+    const px = this.player.x;
+    const py = this.player.y;
+
+    // Paul appears with a flash
+    this.time.delayedCall(400, () => {
+      this.sfx.play('wizardTeleport');
+
+      // Magic flash
+      const flash = this.add.circle(px + 20, py, 6, 0x8844ff, 0.9);
+      flash.setDepth(10000);
+      this.tweens.add({
+        targets: flash,
+        radius: 30,
+        alpha: 0,
+        duration: 400,
+        onComplete: () => flash.destroy(),
+      });
+
+      // Paul sprite (uses miner-mike texture tinted purple as wizard)
+      this._paulSprite = this.add.sprite(px + 20, py, 'miner-mike', 0);
+      this._paulSprite.setTint(0x9966ff);
+      this._paulSprite.setDepth(10001);
+
+      // Shield bubble around Lizzy
+      const shield = this.add.circle(px, py, 12, 0x8844ff, 0.3);
+      shield.setDepth(9999);
+      shield.setStrokeStyle(1, 0xaa66ff);
+      this.tweens.add({
+        targets: shield,
+        radius: 20,
+        alpha: 0.5,
+        duration: 300,
+        yoyo: true,
+        repeat: 1,
+      });
+
+      // Dialogue
+      this.time.delayedCall(600, () => {
+        const cam = this.cameras.main;
+        const dialogBg = this.add.rectangle(cam.width / 2, cam.height / 2 - 20, cam.width - 24, 28, 0x1a1a2e, 0.95)
+          .setScrollFactor(0).setDepth(11000).setStrokeStyle(1, 0x8844ff);
+        const dialogName = this.add.text(16, cam.height / 2 - 30, 'Paul the Wizard', {
+          fontSize: '6px', fontFamily: 'CuteFantasy', color: '#aa88ff', fontStyle: 'bold',
+        }).setScrollFactor(0).setDepth(11001);
+        const dialogText = this.add.text(16, cam.height / 2 - 20, 'Not so fast, Lizzy! I\'ve got you covered!', {
+          fontSize: '7px', fontFamily: 'CuteFantasy', color: '#ffffff',
+          wordWrap: { width: cam.width - 40 },
+        }).setScrollFactor(0).setDepth(11001);
+
+        // Teleport sequence after dialogue
+        this.time.delayedCall(2000, () => {
+          dialogBg.destroy();
+          dialogName.destroy();
+          dialogText.destroy();
+
+          // Swirling particles
+          for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const star = this.add.circle(px, py, 2, 0xaa66ff, 0.9);
+            star.setDepth(10002);
+            this.tweens.add({
+              targets: star,
+              x: px + Math.cos(angle) * 30,
+              y: py + Math.sin(angle) * 30,
+              alpha: 0,
+              duration: 500,
+              onComplete: () => star.destroy(),
+            });
+          }
+
+          shield.destroy();
+          this.sfx.play('wizardTeleport');
+
+          // Fade to white
+          this.cameras.main.fadeOut(600, 255, 255, 255);
+          this.cameras.main.once('camerafadeoutcomplete', () => {
+            if (this._paulSprite) { this._paulSprite.destroy(); this._paulSprite = null; }
+
+            // Restart at overworld with full health
+            const questState = this.questManager.saveState();
+            this.scene.stop('UI');
+            this.scene.restart({
+              mapData: MAPS.overworld,
+              questState: questState,
+              playerHealth: null, // full health
+              gold: Math.max(0, this.gold - 10), // lose 10 gold as penalty
+              xp: this.xp,
+              level: this.level,
+              inventory: this.inventory.saveState(),
+              dayTime: this.dayTime,
+              equipment: this.equipment.saveState(),
+              paulRescued: true, // flag for notification
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // --- Combat juice ---
+  spawnDeathEffect(x, y) {
+    const colors = [0xffffff, 0xffdd00, 0xff8844, 0xffaaaa];
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const color = colors[i % colors.length];
+      const particle = this.add.circle(x, y, 2, color);
+      particle.setDepth(9999);
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * 24,
+        y: y + Math.sin(angle) * 24,
+        alpha: 0,
+        scale: 0,
+        duration: 350,
+        ease: 'Power2',
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
+  spawnLootDrop(x, y) {
+    if (Math.random() > 0.45) return;
+
+    // 30% chance to drop a potion instead of a heart
+    if (Math.random() < 0.3) {
+      this.spawnPotionDrop(x, y);
+      return;
+    }
+
+    const heart = this.add.circle(x, y, 3, 0xe74c3c);
+    heart.setDepth(y);
+    this.physics.add.existing(heart, false);
+    heart.body.setVelocity(
+      (Math.random() - 0.5) * 50,
+      -40
+    );
+    heart.body.setDrag(80);
+    heart.body.setAllowGravity(false);
+
+    this.tweens.add({
+      targets: heart,
+      scale: { from: 0, to: 1 },
+      duration: 200,
+      ease: 'Back.easeOut',
+    });
+
+    this.time.delayedCall(400, () => {
+      if (!heart.active) return;
+      heart.body.setVelocity(0, 0);
+      this.tweens.add({
+        targets: heart,
+        y: heart.y - 3,
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
+
+    this.physics.add.overlap(this.player, heart, () => {
+      if (!heart.active) return;
+      if (this.player.health < this.player.maxHealth) {
+        this.player.health = Math.min(this.player.health + 2, this.player.maxHealth);
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      }
+      this.sfx.play('pickup');
+
+      const flash = this.add.circle(heart.x, heart.y, 6, 0xffffff, 0.8);
+      flash.setDepth(9999);
+      this.tweens.add({
+        targets: flash,
+        scale: 2,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => flash.destroy(),
+      });
+
+      heart.destroy();
+    });
+
+    this.time.delayedCall(8000, () => {
+      if (!heart.active) return;
+      this.tweens.add({
+        targets: heart,
+        alpha: 0,
+        duration: 800,
+        onComplete: () => heart.destroy(),
+      });
+    });
+  }
+
+  spawnPotionDrop(x, y) {
+    // Weighted random potion type
+    const roll = Math.random();
+    let potionId, color;
+    if (roll < 0.55) {
+      potionId = 'health_potion';
+      color = 0xe74c3c;
+    } else if (roll < 0.85) {
+      potionId = 'speed_potion';
+      color = 0x3498db;
+    } else {
+      potionId = 'shield_potion';
+      color = 0xf1c40f;
+    }
+
+    const potion = this.add.circle(x, y, 3, color);
+    potion.setDepth(y);
+    this.physics.add.existing(potion, false);
+    potion.body.setVelocity(
+      (Math.random() - 0.5) * 50,
+      -40
+    );
+    potion.body.setDrag(80);
+    potion.body.setAllowGravity(false);
+
+    // Inner highlight dot
+    const highlight = this.add.circle(x, y, 1.5, 0xffffff, 0.6);
+    highlight.setDepth(y + 1);
+
+    this.tweens.add({
+      targets: [potion, highlight],
+      scale: { from: 0, to: 1 },
+      duration: 200,
+      ease: 'Back.easeOut',
+    });
+
+    this.time.delayedCall(400, () => {
+      if (!potion.active) return;
+      potion.body.setVelocity(0, 0);
+      this.tweens.add({
+        targets: [potion, highlight],
+        y: '-=3',
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
+
+    this.physics.add.overlap(this.player, potion, () => {
+      if (!potion.active) return;
+      const added = this.inventory.addItem(potionId, 1);
+      if (added > 0) {
+        this.sfx.play('pickup');
+        this.events.emit('inventory-changed', this.inventory.slots);
+        this.showNotification('+1 ' + potionId.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+      }
+
+      const flash = this.add.circle(potion.x, potion.y, 6, 0xffffff, 0.8);
+      flash.setDepth(9999);
+      this.tweens.add({
+        targets: flash,
+        scale: 2,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => flash.destroy(),
+      });
+
+      highlight.destroy();
+      potion.destroy();
+    });
+
+    this.time.delayedCall(10000, () => {
+      if (!potion.active) return;
+      this.tweens.add({
+        targets: [potion, highlight],
+        alpha: 0,
+        duration: 800,
+        onComplete: () => {
+          highlight.destroy();
+          potion.destroy();
+        },
+      });
+    });
+  }
+
+  showDamageNumber(x, y, amount) {
+    const text = this.add.text(x + (Math.random() - 0.5) * 8, y, `-${amount}`, {
+      fontSize: '8px',
+      fontFamily: 'CuteFantasy',
+      color: '#ff4444',
+      stroke: '#000000',
+      strokeThickness: 2,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(9999);
+
+    this.tweens.add({
+      targets: text,
+      y: y - 24,
+      alpha: 0,
+      duration: 600,
+      ease: 'Power2',
+      onComplete: () => text.destroy(),
+    });
+  }
+
+  showFloatingText(x, y, msg, color) {
+    const text = this.add.text(x + (Math.random() - 0.5) * 6, y, msg, {
+      fontSize: '6px',
+      fontFamily: 'CuteFantasy',
+      color: color,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(9999);
+
+    this.tweens.add({
+      targets: text,
+      y: y - 18,
+      alpha: 0,
+      duration: 800,
+      ease: 'Power2',
+      onComplete: () => text.destroy(),
+    });
+  }
+
+  hitFreeze(ms) {
+    if (this._inHitFreeze) return;
+    this._inHitFreeze = true;
+    this.physics.world.pause();
+    this.time.delayedCall(ms, () => {
+      this.physics.world.resume();
+      this._inHitFreeze = false;
+    });
+  }
+
+  // --- Minimap ---
+  _setupMinimap() {
+    const cam = this.cameras.main;
+    const mmW = 48;
+    const mmH = 36;
+    const mmX = cam.width - mmW - 4;
+    const mmY = cam.height - mmH - 10;
+
+    // Background frame
+    this.minimapBg = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW + 2, mmH + 2, 0x000000, 0.6)
+      .setScrollFactor(0).setDepth(8500);
+    this.minimapBorder = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW + 2, mmH + 2)
+      .setScrollFactor(0).setDepth(8501).setStrokeStyle(1, 0x666666).setFillStyle(0, 0);
+
+    this.minimapGfx = this.add.graphics().setScrollFactor(0).setDepth(8502);
+
+    // Static background: green, pond, desert, forest
+    this.minimapStaticGfx = this.add.graphics().setScrollFactor(0).setDepth(8501);
+    const g = this.minimapStaticGfx;
+    g.fillStyle(0x4a8c3f);
+    g.fillRect(mmX, mmY, mmW, mmH);
+
+    // Desert zone
+    const biomes = this.mapData.biomes || [];
+    for (const b of biomes) {
+      const bx = mmX + (b.x1 / this.mapData.width) * mmW;
+      const by = mmY + (b.y1 / this.mapData.height) * mmH;
+      const bw = ((b.x2 - b.x1) / this.mapData.width) * mmW;
+      const bh = ((b.y2 - b.y1) / this.mapData.height) * mmH;
+      if (b.type === 'desert') {
+        g.fillStyle(0xccbb77);
+        g.fillRect(bx, by, bw, bh);
+      } else if (b.type === 'forest') {
+        g.fillStyle(0x2d5a1e);
+        g.fillRect(bx, by, bw, bh);
+      }
+    }
+
+    // Pond
+    g.fillStyle(0x4488cc);
+    const pondMX = mmX + (560 / this.worldWidth) * mmW;
+    const pondMY = mmY + (288 / this.worldHeight) * mmH;
+    g.fillEllipse(pondMX, pondMY, 4, 3);
+
+    // Houses
+    g.fillStyle(0x8b5e3c);
+    for (const obj of (this.mapData.objects || [])) {
+      if (obj.type === 'house-wood') {
+        const hx = mmX + (obj.x / this.worldWidth) * mmW;
+        const hy = mmY + (obj.y / this.worldHeight) * mmH;
+        g.fillRect(hx - 2, hy - 1, 4, 3);
+      }
+    }
+
+    // Player dot
+    this.minimapPlayerDot = this.add.circle(0, 0, 1.5, 0xff4444)
+      .setScrollFactor(0).setDepth(8504);
+
+    this._mmX = mmX;
+    this._mmY = mmY;
+    this._mmW = mmW;
+    this._mmH = mmH;
+  }
+
+  _updateMinimap() {
+    if (!this.minimap && !this.minimapGfx) return;
+
+    const gfx = this.minimapGfx;
+    gfx.clear();
+
+    // Enemy dots (red)
+    gfx.fillStyle(0xff6666);
+    this.enemies.getChildren().forEach(e => {
+      if (e.health > 0) {
+        const ex = this._mmX + (e.x / this.worldWidth) * this._mmW;
+        const ey = this._mmY + (e.y / this.worldHeight) * this._mmH;
+        gfx.fillCircle(ex, ey, 1);
+      }
+    });
+
+    // NPC dots (yellow)
+    gfx.fillStyle(0xffff44);
+    this.npcs.getChildren().forEach(n => {
+      const nx = this._mmX + (n.x / this.worldWidth) * this._mmW;
+      const ny = this._mmY + (n.y / this.worldHeight) * this._mmH;
+      gfx.fillCircle(nx, ny, 1);
+    });
+
+    // Player dot position
+    const px = this._mmX + (this.player.x / this.worldWidth) * this._mmW;
+    const py = this._mmY + (this.player.y / this.worldHeight) * this._mmH;
+    this.minimapPlayerDot.setPosition(px, py);
+  }
+
+  // --- Environmental decoration ---
+  decorateWorld(map) {
+    const ts = map.tileSize;
+
+    // Biome overlays
+    for (const biome of (map.biomes || [])) {
+      for (let row = biome.y1; row < biome.y2; row++) {
+        for (let col = biome.x1; col < biome.x2; col++) {
+          if (biome.type === 'desert') {
+            this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0xddcc88, 0.5).setDepth(0);
+          } else if (biome.type === 'forest') {
+            this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x225522, 0.3).setDepth(0);
+          }
+        }
+      }
+    }
+
+    // Desert cacti
+    const cactiPositions = [
+      { x: 640, y: 60 }, { x: 700, y: 30 }, { x: 750, y: 80 },
+      { x: 670, y: 130 }, { x: 730, y: 170 }, { x: 760, y: 50 },
+    ];
+    for (const c of cactiPositions) {
+      // Simple cactus: green rectangles
+      const stem = this.add.rectangle(c.x, c.y, 4, 14, 0x44aa44);
+      stem.setDepth(c.y);
+      const armL = this.add.rectangle(c.x - 4, c.y - 2, 4, 6, 0x44aa44);
+      armL.setDepth(c.y);
+      const armR = this.add.rectangle(c.x + 4, c.y - 4, 4, 5, 0x44aa44);
+      armR.setDepth(c.y);
+      const zone = this.add.zone(c.x, c.y, 6, 12);
+      this.obstacles.add(zone);
+    }
+
+    // Desert temple entrance (stone pillars and archway)
+    const templeX = 692;
+    const templeY = 168;
+    // Left pillar
+    this.add.rectangle(templeX - 18, templeY - 8, 8, 24, 0x8b7355).setDepth(templeY + 10);
+    this.add.rectangle(templeX - 18, templeY - 22, 10, 6, 0x9a8466).setDepth(templeY + 11);
+    // Right pillar
+    this.add.rectangle(templeX + 18, templeY - 8, 8, 24, 0x8b7355).setDepth(templeY + 10);
+    this.add.rectangle(templeX + 18, templeY - 22, 10, 6, 0x9a8466).setDepth(templeY + 11);
+    // Arch top
+    this.add.rectangle(templeX, templeY - 22, 44, 6, 0x9a8466).setDepth(templeY + 12);
+    // Dark entrance
+    this.add.rectangle(templeX, templeY, 24, 14, 0x222211).setDepth(templeY - 1);
+    // Obstacle zones for pillars
+    const pillarL = this.add.zone(templeX - 18, templeY - 8, 8, 24);
+    this.obstacles.add(pillarL);
+    const pillarR = this.add.zone(templeX + 18, templeY - 8, 8, 24);
+    this.obstacles.add(pillarR);
+
+    // Forest extra trees (dense west forest)
+    const forestTrees = [
+      { x: 30, y: 280 }, { x: 60, y: 320 }, { x: 40, y: 360 },
+      { x: 80, y: 400 }, { x: 50, y: 440 }, { x: 100, y: 350 },
+      { x: 20, y: 480 }, { x: 70, y: 520 },
+    ];
+    for (const t of forestTrees) {
+      const trunk = this.add.rectangle(t.x, t.y, 6, 10, 0x553311);
+      trunk.setDepth(t.y);
+      const canopy = this.add.circle(t.x, t.y - 8, 8, 0x226622);
+      canopy.setDepth(t.y + 1);
+      const zone = this.add.zone(t.x, t.y, 8, 10);
+      this.obstacles.add(zone);
+    }
+
+    // Dirt path from spawn area to Bob's house
+    const pathTiles = [];
+    for (let x = 12; x <= 29; x++) {
+      pathTiles.push([x, 7], [x, 8]);
+    }
+    for (let y = 3; y <= 7; y++) {
+      pathTiles.push([28, y], [29, y]);
+    }
+    for (const [px, py] of pathTiles) {
+      this.add.image(px * ts, py * ts, 'path-middle').setOrigin(0, 0);
+    }
+
+    // Small pond
+    const pondTiles = [
+      [35, 17], [36, 17],
+      [34, 18], [35, 18], [36, 18], [37, 18],
+      [35, 19], [36, 19],
+    ];
+    for (const [px, py] of pondTiles) {
+      this.add.image(px * ts, py * ts, 'water-middle').setOrigin(0, 0);
+      const zone = this.add.zone(px * ts + ts / 2, py * ts + ts / 2, ts, ts);
+      this.obstacles.add(zone);
+    }
+
+    // Pond visit zone (larger area around the pond for exploration quest)
+    // Overlap is set up later in create() after player exists
+    this.pondVisitZone = this.add.zone(35.5 * ts, 18 * ts, 6 * ts, 5 * ts);
+    this.physics.add.existing(this.pondVisitZone, true);
+    this._pondVisited = false;
+
+    // Flowers
+    const flowers = [
+      { x: 120, y: 180, color: 0xff6b6b },
+      { x: 280, y: 160, color: 0xffdd44 },
+      { x: 420, y: 355, color: 0xff88cc },
+      { x: 560, y: 420, color: 0x88ccff },
+      { x: 180, y: 385, color: 0xffdd44 },
+      { x: 650, y: 280, color: 0xff6b6b },
+      { x: 330, y: 140, color: 0xff88cc },
+      { x: 480, y: 520, color: 0x88ccff },
+      { x: 720, y: 320, color: 0xffdd44 },
+      { x: 60, y: 400, color: 0xff6b6b },
+    ];
+    for (const f of flowers) {
+      this.add.circle(f.x, f.y + 2, 1, 0x44aa44).setDepth(1);
+      this.add.circle(f.x, f.y, 2, f.color).setDepth(2);
+    }
+
+    // Cave entrance visual
+    const caveX = 60;
+    const caveY = 88;
+    this.add.rectangle(caveX, caveY, 28, 20, 0x3a2a1a).setDepth(caveY - 1);
+    this.add.rectangle(caveX, caveY - 10, 30, 6, 0x555544).setDepth(caveY);
+    this.add.text(caveX, caveY - 18, 'CAVE', {
+      fontSize: '5px', fontFamily: 'CuteFantasy', color: '#888866',
+    }).setOrigin(0.5).setDepth(caveY + 1);
+
+    // Rocks
+    const rocks = [
+      { x: 340, y: 280 },
+      { x: 500, y: 385 },
+      { x: 620, y: 155 },
+      { x: 160, y: 460 },
+      { x: 740, y: 520 },
+    ];
+    for (const r of rocks) {
+      const rock = this.add.ellipse(r.x, r.y, 8, 5, 0x777777);
+      rock.setDepth(r.y);
+      const highlight = this.add.ellipse(r.x - 1, r.y - 1, 4, 2, 0x999999);
+      highlight.setDepth(r.y + 1);
+      const zone = this.add.zone(r.x, r.y, 6, 4);
+      this.obstacles.add(zone);
+    }
+  }
+
+  update(time, delta) {
+    // Pause menu
+    if (this._pauseOpen) {
+      this._handlePauseInput();
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.escKey) && !this.inDialogue && !this._shopActive && !this.overlayOpen) {
+      this.openPauseMenu();
+      return;
+    }
+
+    // Handle overlay toggles
+    if (Phaser.Input.Keyboard.JustDown(this.mapKey) && !this.inDialogue) {
+      if (this.questBook.visible) return;
+      this.overlayOpen = this.mapOverlay.toggle(
+        this.player.x, this.player.y,
+        this.worldWidth, this.worldHeight,
+        this.isOverworld ? this.npcs : null
+      );
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.questKey) && !this.inDialogue) {
+      if (this.mapOverlay.visible) return;
+      this.overlayOpen = this.questBook.toggle(this.questManager);
+      return;
+    }
+
+    // Block input while overlay is open
+    if (this.overlayOpen) return;
+
+    // Shop menu input
+    if (this._shopActive) {
+      if (Phaser.Input.Keyboard.JustDown(this._shopEscKey)) {
+        this.closeShop();
+        return;
+      }
+      for (let i = 0; i < this.itemKeys.length; i++) {
+        if (Phaser.Input.Keyboard.JustDown(this.itemKeys[i])) {
+          this.handleShopBuy(i);
+          return;
+        }
+      }
+      if (this._shopExtraKeys) {
+        for (let i = 0; i < this._shopExtraKeys.length; i++) {
+          if (Phaser.Input.Keyboard.JustDown(this._shopExtraKeys[i])) {
+            this.handleShopBuy(3 + i);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
+    // During dialogue, only allow advancing
+    if (this.inDialogue) {
+      if (Phaser.Input.Keyboard.JustDown(this.interactKey) ||
+          Phaser.Input.Keyboard.JustDown(this.player.attackKey)) {
+        this.advanceDialogue();
+      }
+      return;
+    }
+
+    this.player.update(time, delta);
+
+    // Item hotbar
+    for (let i = 0; i < this.itemKeys.length; i++) {
+      if (Phaser.Input.Keyboard.JustDown(this.itemKeys[i])) {
+        this.useItem(i);
+      }
+    }
+
+    // Fishing minigame update
+    if (this.fishingGame.active) {
+      this.fishingGame.update(delta);
+      return;
+    }
+
+    // Magic attack
+    if (Phaser.Input.Keyboard.JustDown(this.magicKey) && this.player.mana >= this.player.magicCost) {
+      this._castMagic();
+    }
+
+    // NPC interaction / chest / fishing
+    if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      // Priority: NPC > Chest > Fishing
+      let npcNearby = false;
+      this.npcs.getChildren().forEach((n) => { if (n.canInteract) npcNearby = true; });
+      if (npcNearby) {
+        this.handleNPCInteraction();
+      } else if (this.handleChestOpen()) {
+        // Chest was opened
+      } else if (this._nearPond && this.isOverworld) {
+        this.fishingGame.start();
+      }
+    }
+
+    // Update NPCs
+    this.npcs.getChildren().forEach((npc) => {
+      if (npc.update) {
+        npc.update(time, delta, this.player, this.questManager, this.dayTime);
+      }
+    });
+
+    // Update enemies
+    this.enemies.getChildren().forEach((enemy) => {
+      if (enemy.update) {
+        enemy.update(time, delta, this.player);
+      }
+    });
+
+    // Update chickens
+    this.chickens.getChildren().forEach((chicken) => {
+      if (chicken.update && !chicken.collected) {
+        chicken.update(time, delta);
+      }
+    });
+
+    // Update pet
+    if (this.pet) this.pet.update(time, delta, this.player);
+
+    // Update chests
+    this.chests.getChildren().forEach((c) => {
+      if (c.update && !c.opened) c.update(time, delta, this.player);
+    });
+
+    // Update unicorns
+    this.unicorns.getChildren().forEach((u) => {
+      if (u.update) u.update(time, delta);
+    });
+
+    // Update fairies
+    this.fairies.getChildren().forEach((f) => {
+      if (f.update && !f.buffGiven) f.update(time, delta);
+    });
+
+    // Ghost night spawning/despawning
+    if (this._ghostSpawns && this.isOverworld) {
+      if (this.isNight && !this._ghostsSpawned) {
+        this._ghostsSpawned = true;
+        for (const pos of this._ghostSpawns) {
+          const ghost = new Ghost(this, pos.x, pos.y);
+          this.ghosts.add(ghost);
+          this.enemies.add(ghost);
+        }
+      } else if (!this.isNight && this._ghostsSpawned) {
+        this._ghostsSpawned = false;
+        // Fade out and destroy ghosts at dawn
+        this.ghosts.getChildren().forEach((g) => {
+          if (g._destroyVisuals) g._destroyVisuals();
+          g.destroy();
+        });
+      }
+    }
+
+    // Update ghosts
+    this.ghosts.getChildren().forEach((g) => {
+      if (g.update && g.health > 0) g.update(time, delta, this.player);
+    });
+
+    // Process respawn queue
+    if (this.respawnQueue) {
+      for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
+        this.respawnQueue[i].timer -= delta;
+        if (this.respawnQueue[i].timer <= 0) {
+          const spawn = this.respawnQueue.splice(i, 1)[0];
+          // Only respawn if player is far enough away
+          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, spawn.x, spawn.y);
+          if (dist > 120) {
+            if (spawn.type === 'skeleton') {
+              this.spawnSkeleton(spawn.x, spawn.y);
+            } else {
+              this.spawnSlime(spawn.x, spawn.y);
+            }
+          } else {
+            // Too close, retry in 10 seconds
+            spawn.timer = 10000;
+            this.respawnQueue.push(spawn);
+          }
+        }
+      }
+    }
+
+    // Cave/temple darkness torch effect (RenderTexture)
+    if (this.darknessRT) {
+      const cam = this.cameras.main;
+      const px = this.player.x - cam.scrollX;
+      const py = this.player.y - cam.scrollY;
+      const darkness = this.isTemple ? 0.6 : 0.85;
+      const torchR = this.isTemple ? 60 : 50;
+      const size = torchR * 2 + 24;
+
+      this.darknessRT.fill(0x000000, darkness);
+      this.darknessRT.erase('torch-light', px - size / 2, py - size / 2);
+    }
+
+    // Day/night cycle update
+    if (this.dayOverlay) {
+      this.dayTime += (delta / 1000) * this.daySpeed;
+      if (this.dayTime >= 1) this.dayTime -= 1;
+      this._updateDayNight();
+    }
+
+    // Footstep dust particles
+    this._dustTimer = (this._dustTimer || 0) - delta;
+    if (this._dustTimer <= 0 && (this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0)) {
+      this._dustTimer = 180;
+      const dust = this.add.circle(
+        this.player.x + (Math.random() - 0.5) * 4,
+        this.player.y + 6,
+        1.5,
+        this.isCave ? 0x665544 : (this.isTemple ? 0xddcc88 : 0xccbb99),
+        0.5
+      );
+      dust.setDepth(this.player.y - 1);
+      this.tweens.add({
+        targets: dust,
+        alpha: 0,
+        scale: 2,
+        y: dust.y + 3,
+        duration: 300,
+        onComplete: () => dust.destroy(),
+      });
+    }
+
+    // Check if near pond for fishing
+    if (this.isOverworld) {
+      const pondCX = 35.5 * 16;
+      const pondCY = 18 * 16;
+      const dPond = Phaser.Math.Distance.Between(this.player.x, this.player.y, pondCX, pondCY);
+      this._nearPond = dPond < 50;
+    }
+
+    // Water shimmer (overworld)
+    if (this.isOverworld) {
+      this._shimmerTimer = (this._shimmerTimer || 0) - delta;
+      if (this._shimmerTimer <= 0) {
+        this._shimmerTimer = 800;
+        // Pond center area
+        const sx = 35 * 16 + Math.random() * 48;
+        const sy = 17 * 16 + Math.random() * 48;
+        const sparkle = this.add.circle(sx, sy, 1, 0xffffff, 0.6);
+        sparkle.setDepth(sy + 1);
+        this.tweens.add({
+          targets: sparkle,
+          alpha: 0,
+          scale: 0.3,
+          duration: 600,
+          onComplete: () => sparkle.destroy(),
+        });
+      }
+    }
+
+    // Update minimap
+    if (this.minimapGfx) {
+      this._updateMinimap();
+    }
+
+    // Depth sort
+    this.player.setDepth(this.player.y);
+    this.enemies.getChildren().forEach((e) => e.setDepth(e.y));
+  }
+}

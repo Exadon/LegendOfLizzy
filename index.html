@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legend of Lizzy</title>
+  <style>
+    @font-face {
+      font-family: 'CuteFantasy';
+      src: url('/assets/Cute_Fantasy_UI/Cute_Fantasy_UI/Fonts/CuteFantasy-5x9.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    canvas { image-rendering: pixelated; }
+    /* Preload the font so it's ready when Phaser renders text */
+    .font-preload { font-family: 'CuteFantasy'; position: absolute; left: -9999px; }
+  </style>
+</head>
+<body>
+  <div class="font-preload">.</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

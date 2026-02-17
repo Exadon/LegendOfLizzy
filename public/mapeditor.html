@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legend of Lizzy - Map Editor</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-dark: #1a1a2e;
+  --bg-panel: #16213e;
+  --bg-input: #0f3460;
+  --bg-hover: #1a3a6e;
+  --bg-active: #e94560;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b8;
+  --text-bright: #ffffff;
+  --border: #2a2a4a;
+  --accent: #e94560;
+  --accent-hover: #ff6b81;
+  --success: #2ecc71;
+  --warning: #f1c40f;
+  --info: #3498db;
+  --door-color: rgba(155, 89, 182, 0.5);
+  --collision-color: rgba(231, 76, 60, 0.35);
+  --spawn-color: rgba(46, 204, 113, 0.8);
+  --sidebar-width: 240px;
+  --topbar-height: 48px;
+}
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+/* ===== Top Bar ===== */
+#topbar {
+  height: var(--topbar-height);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+  z-index: 100;
+  flex-shrink: 0;
+}
+#topbar label { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+#topbar input[type="text"], #topbar input[type="number"], #topbar select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+#topbar input[type="number"] { width: 56px; }
+#topbar input[type="text"] { width: 120px; }
+.topbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar-separator {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg-hover); color: var(--text-bright); }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: white; }
+.btn-accent:hover { background: var(--accent-hover); }
+.btn-success { background: #27ae60; border-color: #27ae60; color: white; }
+.btn-success:hover { background: var(--success); }
+
+/* ===== Main Layout ===== */
+#main-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===== Left Sidebar ===== */
+#sidebar {
+  width: var(--sidebar-width);
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.sidebar-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.tool-btn {
+  background: var(--bg-input);
+  border: 2px solid transparent;
+  color: var(--text-primary);
+  padding: 8px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.tool-btn:hover { background: var(--bg-hover); color: var(--text-bright); }
+.tool-btn.active { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); color: var(--text-bright); }
+.tool-btn .tool-icon { font-size: 18px; line-height: 1; }
+.tool-btn .tool-key {
+  font-size: 9px;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.06);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* Tile palette */
+.tile-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 40px);
+  gap: 4px;
+}
+.tile-swatch {
+  width: 40px;
+  height: 40px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  image-rendering: pixelated;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+}
+.tile-swatch:hover { border-color: var(--text-secondary); }
+.tile-swatch.active { border-color: var(--accent); box-shadow: 0 0 6px rgba(233,69,96,0.4); }
+.tile-swatch canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+.tile-swatch .tile-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.7);
+  font-size: 8px;
+  text-align: center;
+  padding: 1px;
+  color: var(--text-bright);
+}
+
+/* Object palette */
+.object-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.object-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+}
+.object-item:hover { background: var(--bg-hover); }
+.object-item.active { border-color: var(--accent); background: rgba(233,69,96,0.15); }
+.object-item img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.object-item span { font-size: 12px; }
+
+/* ===== Canvas Container ===== */
+#canvas-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: crosshair;
+  background: #111122;
+  background-image:
+    linear-gradient(45deg, #0d0d1a 25%, transparent 25%),
+    linear-gradient(-45deg, #0d0d1a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #0d0d1a 75%),
+    linear-gradient(-45deg, transparent 75%, #0d0d1a 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+#map-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  image-rendering: pixelated;
+}
+
+/* ===== Status Bar ===== */
+#statusbar {
+  height: 24px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  gap: 16px;
+  flex-shrink: 0;
+}
+#statusbar .status-item { display: flex; align-items: center; gap: 4px; }
+
+/* ===== Door Properties Dialog ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+.modal-overlay.visible { display: flex; }
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 340px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.modal h2 { font-size: 16px; margin-bottom: 16px; color: var(--text-bright); }
+.modal .form-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.modal .form-row label {
+  width: 90px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.modal .form-row input, .modal .form-row select {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+.modal .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ===== Layer Visibility Toggles ===== */
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.layer-toggle input[type="checkbox"] { accent-color: var(--accent); }
+
+/* ===== Scrollbar styling ===== */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a5a; }
+
+/* ===== Context Menu ===== */
+.context-menu {
+  display: none;
+  position: fixed;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 2000;
+}
+.context-menu.visible { display: block; }
+.context-menu-item {
+  padding: 6px 16px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.context-menu-item:hover { background: var(--bg-hover); color: var(--text-bright); }
+.context-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ===== Toast Notifications ===== */
+#toast-container {
+  position: fixed;
+  bottom: 36px;
+  right: 12px;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.toast {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-bright);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: toast-in 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast.success { border-left: 3px solid var(--success); }
+.toast.error { border-left: 3px solid var(--accent); }
+.toast.info { border-left: 3px solid var(--info); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- ===== Top Bar ===== -->
+<div id="topbar">
+  <div class="topbar-group">
+    <label>Map:</label>
+    <input type="text" id="map-name" value="overworld" placeholder="map name">
+  </div>
+  <div class="topbar-separator"></div>
+  <div class="topbar-group">
+    <label>W:</label>
+    <input type="number" id="map-width" value="50" min="5" max="500">
+    <label>H:</label>
+    <input type="number" id="map-height" value="38" min="5" max="500">
+    <button class="btn" id="btn-resize" title="Resize map">Resize</button>
+  </div>
+  <div class="topbar-separator"></div>
+  <div class="topbar-group">
+    <label>Layer:</label>
+    <select id="active-layer">
+      <option value="ground">Ground</option>
+      <option value="collision">Collision</option>
+      <option value="objects">Objects</option>
+      <option value="doors">Doors / Triggers</option>
+    </select>
+  </div>
+  <div class="topbar-separator"></div>
+  <div class="topbar-group">
+    <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
+  </div>
+  <div class="topbar-separator"></div>
+  <div class="topbar-group">
+    <button class="btn btn-success" id="btn-save" title="Save (Ctrl+S)">Save JSON</button>
+    <button class="btn" id="btn-load" title="Open (Ctrl+O)">Load JSON</button>
+    <button class="btn" id="btn-new" title="New map">New</button>
+  </div>
+  <div style="flex:1"></div>
+  <div class="topbar-group">
+    <label id="zoom-label">Zoom: 2x</label>
+    <button class="btn" id="btn-zoom-in" title="Zoom In (+)">+</button>
+    <button class="btn" id="btn-zoom-out" title="Zoom Out (-)">-</button>
+    <button class="btn" id="btn-zoom-fit" title="Fit to view">Fit</button>
+  </div>
+</div>
+
+<!-- ===== Main Area ===== -->
+<div id="main-area">
+  <!-- Left Sidebar -->
+  <div id="sidebar">
+
+    <!-- Tools -->
+    <div class="sidebar-section">
+      <h3>Tools</h3>
+      <div class="tool-grid" id="tool-grid">
+        <button class="tool-btn active" data-tool="brush" title="Tile Brush">
+          <span class="tool-icon">&#x1F58C;</span>
+          <span>Brush</span>
+          <span class="tool-key">B</span>
+        </button>
+        <button class="tool-btn" data-tool="eraser" title="Eraser">
+          <span class="tool-icon">&#x1F9F9;</span>
+          <span>Eraser</span>
+          <span class="tool-key">E</span>
+        </button>
+        <button class="tool-btn" data-tool="fill" title="Flood Fill">
+          <span class="tool-icon">&#x1F4A7;</span>
+          <span>Fill</span>
+          <span class="tool-key">F</span>
+        </button>
+        <button class="tool-btn" data-tool="object" title="Place Object">
+          <span class="tool-icon">&#x1F333;</span>
+          <span>Object</span>
+          <span class="tool-key">O</span>
+        </button>
+        <button class="tool-btn" data-tool="collision" title="Collision Toggle">
+          <span class="tool-icon">&#x26D4;</span>
+          <span>Collision</span>
+          <span class="tool-key">C</span>
+        </button>
+        <button class="tool-btn" data-tool="door" title="Door / Trigger">
+          <span class="tool-icon">&#x1F6AA;</span>
+          <span>Door</span>
+          <span class="tool-key">D</span>
+        </button>
+        <button class="tool-btn" data-tool="spawn" title="Set Player Spawn">
+          <span class="tool-icon">&#x1F464;</span>
+          <span>Spawn</span>
+          <span class="tool-key">X</span>
+        </button>
+        <button class="tool-btn" data-tool="select" title="Select & Move Objects">
+          <span class="tool-icon">&#x1F5B1;</span>
+          <span>Select</span>
+          <span class="tool-key">V</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tile Palette -->
+    <div class="sidebar-section" id="tile-section">
+      <h3>Tiles</h3>
+      <div class="tile-palette" id="tile-palette"></div>
+    </div>
+
+    <!-- Object Palette -->
+    <div class="sidebar-section" id="object-section" style="display:none">
+      <h3>Objects</h3>
+      <div class="object-palette" id="object-palette"></div>
+    </div>
+
+    <!-- Brush Size -->
+    <div class="sidebar-section">
+      <h3>Brush Size</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="range" id="brush-size" min="1" max="10" value="1" style="flex:1;accent-color:var(--accent);">
+        <span id="brush-size-label" style="font-size:12px;min-width:20px;text-align:center;">1</span>
+      </div>
+    </div>
+
+    <!-- Layer Visibility -->
+    <div class="sidebar-section">
+      <h3>Visibility</h3>
+      <label class="layer-toggle"><input type="checkbox" id="vis-ground" checked> Ground Layer</label>
+      <label class="layer-toggle"><input type="checkbox" id="vis-collision" checked> Collision Overlay</label>
+      <label class="layer-toggle"><input type="checkbox" id="vis-objects" checked> Objects</label>
+      <label class="layer-toggle"><input type="checkbox" id="vis-doors" checked> Doors / Triggers</label>
+      <label class="layer-toggle"><input type="checkbox" id="vis-grid" checked> Grid</label>
+      <label class="layer-toggle"><input type="checkbox" id="vis-spawn" checked> Spawn Point</label>
+    </div>
+
+  </div>
+
+  <!-- Canvas -->
+  <div id="canvas-container">
+    <canvas id="map-canvas"></canvas>
+  </div>
+</div>
+
+<!-- Status Bar -->
+<div id="statusbar">
+  <span class="status-item" id="status-pos">Tile: 0, 0</span>
+  <span class="status-item" id="status-pixel">Px: 0, 0</span>
+  <span class="status-item" id="status-tool">Tool: Brush</span>
+  <span class="status-item" id="status-layer">Layer: Ground</span>
+  <span class="status-item" id="status-tile">Tile ID: 0</span>
+  <span style="flex:1"></span>
+  <span class="status-item" id="status-info">Ready</span>
+</div>
+
+<!-- Door Properties Modal -->
+<div class="modal-overlay" id="door-modal">
+  <div class="modal">
+    <h2>Door / Transition Properties</h2>
+    <div class="form-row">
+      <label>Target Map:</label>
+      <input type="text" id="door-target-map" value="house_interior" placeholder="map name">
+    </div>
+    <div class="form-row">
+      <label>Target X:</label>
+      <input type="number" id="door-target-x" value="100">
+    </div>
+    <div class="form-row">
+      <label>Target Y:</label>
+      <input type="number" id="door-target-y" value="100">
+    </div>
+    <div class="form-row">
+      <label>Width (px):</label>
+      <input type="number" id="door-width" value="16" min="1">
+    </div>
+    <div class="form-row">
+      <label>Height (px):</label>
+      <input type="number" id="door-height" value="16" min="1">
+    </div>
+    <div class="form-actions">
+      <button class="btn" id="door-cancel">Cancel</button>
+      <button class="btn" id="door-delete" style="background:#c0392b;border-color:#c0392b;color:white;">Delete</button>
+      <button class="btn btn-accent" id="door-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="context-menu">
+  <div class="context-menu-item" data-action="eyedropper">Eyedropper (pick tile)</div>
+  <div class="context-menu-separator"></div>
+  <div class="context-menu-item" data-action="delete-object">Delete Object</div>
+  <div class="context-menu-item" data-action="edit-door">Edit Door</div>
+  <div class="context-menu-separator"></div>
+  <div class="context-menu-item" data-action="set-spawn">Set Spawn Here</div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept=".json" style="display:none">
+
+<script>
+// ============================================================
+//  LEGEND OF LIZZY - MAP EDITOR
+//  Standalone vanilla JS map editor for the Cute Fantasy tileset
+// ============================================================
+
+(function() {
+'use strict';
+
+// ===== Configuration =====
+const TILE_SIZE = 16;
+const DEFAULT_ZOOM = 2;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 8;
+const ZOOM_STEP = 0.25;
+
+// Tile definitions (id, name, path, shortcut)
+const TILE_DEFS = [
+  { id: 0, name: 'Grass',   path: 'assets/Cute_Fantasy/Tiles/Grass/Grass_1_Middle.png', key: 'G' },
+  { id: 1, name: 'Water',   path: 'assets/Cute_Fantasy/Tiles/Water/Water_Middle.png',   key: 'W' },
+  { id: 2, name: 'Path',    path: 'assets/Cute_Fantasy/Tiles/Grass/Path_Middle.png',    key: 'P' },
+  { id: 3, name: 'Grass 2', path: 'assets/Cute_Fantasy/Tiles/Grass/Grass_2_Middle.png'  },
+  { id: 4, name: 'Grass 3', path: 'assets/Cute_Fantasy/Tiles/Grass/Grass_3_Middle.png'  },
+  { id: 5, name: 'Grass 4', path: 'assets/Cute_Fantasy/Tiles/Grass/Grass_4_Middle.png'  },
+];
+
+// Object definitions
+const OBJECT_DEFS = [
+  { type: 'oak-tree',       name: 'Oak Tree',       path: 'assets/Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.png',       w: 48, h: 64 },
+  { type: 'oak-tree-small', name: 'Small Oak',      path: 'assets/Cute_Fantasy_Free/Outdoor decoration/Oak_Tree_Small.png', w: 32, h: 48 },
+  { type: 'chest',          name: 'Chest',          path: 'assets/Cute_Fantasy_Free/Outdoor decoration/Chest.png',          w: 16, h: 16 },
+  { type: 'house-wood',     name: 'Wood House',     path: 'assets/Cute_Fantasy_Free/Outdoor decoration/House_1_Wood_Base_Blue.png', w: 80, h: 80 },
+  { type: 'fences',         name: 'Fences',         path: 'assets/Cute_Fantasy_Free/Outdoor decoration/Fences.png',         w: 16, h: 16 },
+  { type: 'bridge-wood',    name: 'Wood Bridge',    path: 'assets/Cute_Fantasy_Free/Outdoor decoration/Bridge_Wood.png',    w: 48, h: 32 },
+];
+
+// ===== State =====
+let mapData = {
+  name: 'overworld',
+  width: 50,
+  height: 38,
+  tileSize: TILE_SIZE,
+  layers: {
+    ground: [],
+    collision: []
+  },
+  objects: [],
+  doors: [],
+  playerSpawn: { x: 200, y: 128 }
+};
+
+let zoom = DEFAULT_ZOOM;
+let panX = 0, panY = 0;
+let activeTool = 'brush';
+let activeTileId = 0;
+let activeObjectType = 'oak-tree';
+let brushSize = 1;
+let showGrid = true;
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+let panStartPanX = 0, panStartPanY = 0;
+let isDrawing = false;
+let drawStartX = 0, drawStartY = 0;
+let doorDragRect = null;
+let selectedDoorIndex = -1;
+let selectedObjectIndex = -1;
+let dragOffset = null;
+
+let visibility = {
+  ground: true,
+  collision: true,
+  objects: true,
+  doors: true,
+  grid: true,
+  spawn: true,
+};
+
+// Undo/Redo
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 100;
+
+// Image caches
+const tileImages = {};
+const objectImages = {};
+let imagesLoaded = 0;
+let totalImages = 0;
+
+// DOM refs
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('canvas-container');
+
+// ===== Initialization =====
+function init() {
+  loadImages();
+  initMap(mapData.width, mapData.height);
+  buildTilePalette();
+  buildObjectPalette();
+  bindEvents();
+  resizeCanvas();
+  requestAnimationFrame(renderLoop);
+  toast('Map editor ready. Use toolbar or keyboard shortcuts.', 'info');
+}
+
+function loadImages() {
+  totalImages = TILE_DEFS.length + OBJECT_DEFS.length;
+  TILE_DEFS.forEach(def => {
+    const img = new Image();
+    img.src = def.path;
+    img.onload = () => { imagesLoaded++; };
+    img.onerror = () => { console.warn('Failed to load tile:', def.path); imagesLoaded++; };
+    tileImages[def.id] = img;
+  });
+  OBJECT_DEFS.forEach(def => {
+    const img = new Image();
+    img.src = def.path;
+    img.onload = () => {
+      imagesLoaded++;
+      // Auto-detect real dimensions from loaded image
+      def.naturalW = img.naturalWidth;
+      def.naturalH = img.naturalHeight;
+    };
+    img.onerror = () => { console.warn('Failed to load object:', def.path); imagesLoaded++; };
+    objectImages[def.type] = img;
+  });
+}
+
+function initMap(w, h) {
+  mapData.width = w;
+  mapData.height = h;
+  if (!mapData.layers.ground.length || mapData.layers.ground.length !== h || mapData.layers.ground[0].length !== w) {
+    mapData.layers.ground = Array.from({ length: h }, () => Array(w).fill(0));
+  }
+  if (!mapData.layers.collision.length || mapData.layers.collision.length !== h || mapData.layers.collision[0].length !== w) {
+    mapData.layers.collision = Array.from({ length: h }, () => Array(w).fill(0));
+  }
+}
+
+// ===== Tile Palette =====
+function buildTilePalette() {
+  const palette = document.getElementById('tile-palette');
+  palette.innerHTML = '';
+  TILE_DEFS.forEach(def => {
+    const swatch = document.createElement('div');
+    swatch.className = 'tile-swatch' + (def.id === activeTileId ? ' active' : '');
+    swatch.title = def.name + (def.key ? ' [' + def.key + ']' : '');
+    swatch.dataset.tileId = def.id;
+
+    const cvs = document.createElement('canvas');
+    cvs.width = 40;
+    cvs.height = 40;
+    const sctx = cvs.getContext('2d');
+    sctx.imageSmoothingEnabled = false;
+
+    const img = tileImages[def.id];
+    const draw = () => {
+      sctx.clearRect(0, 0, 40, 40);
+      sctx.drawImage(img, 0, 0, 40, 40);
+    };
+    if (img.complete && img.naturalWidth) draw();
+    else img.addEventListener('load', draw);
+
+    swatch.appendChild(cvs);
+
+    const label = document.createElement('div');
+    label.className = 'tile-label';
+    label.textContent = def.name;
+    swatch.appendChild(label);
+
+    swatch.addEventListener('click', () => {
+      activeTileId = def.id;
+      activeTool = 'brush';
+      updateToolUI();
+      updateTilePaletteUI();
+    });
+
+    palette.appendChild(swatch);
+  });
+}
+
+function updateTilePaletteUI() {
+  document.querySelectorAll('.tile-swatch').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.tileId) === activeTileId);
+  });
+}
+
+// ===== Object Palette =====
+function buildObjectPalette() {
+  const palette = document.getElementById('object-palette');
+  palette.innerHTML = '';
+  OBJECT_DEFS.forEach(def => {
+    const item = document.createElement('div');
+    item.className = 'object-item' + (def.type === activeObjectType ? ' active' : '');
+    item.dataset.objectType = def.type;
+
+    const img = document.createElement('img');
+    img.src = def.path;
+    img.alt = def.name;
+    item.appendChild(img);
+
+    const span = document.createElement('span');
+    span.textContent = def.name;
+    item.appendChild(span);
+
+    item.addEventListener('click', () => {
+      activeObjectType = def.type;
+      activeTool = 'object';
+      updateToolUI();
+      updateObjectPaletteUI();
+    });
+
+    palette.appendChild(item);
+  });
+}
+
+function updateObjectPaletteUI() {
+  document.querySelectorAll('.object-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.objectType === activeObjectType);
+  });
+}
+
+// ===== Tool UI =====
+function updateToolUI() {
+  document.querySelectorAll('.tool-btn').forEach(el => {
+    el.classList.toggle('active', el.dataset.tool === activeTool);
+  });
+  // Show/hide tile vs object palette
+  document.getElementById('tile-section').style.display =
+    (activeTool === 'brush' || activeTool === 'fill' || activeTool === 'eraser') ? '' : 'none';
+  document.getElementById('object-section').style.display =
+    (activeTool === 'object') ? '' : 'none';
+
+  // Update active layer dropdown to match tool
+  const layerSelect = document.getElementById('active-layer');
+  if (activeTool === 'brush' || activeTool === 'fill' || activeTool === 'eraser') {
+    layerSelect.value = 'ground';
+  } else if (activeTool === 'collision') {
+    layerSelect.value = 'collision';
+  } else if (activeTool === 'object' || activeTool === 'select') {
+    layerSelect.value = 'objects';
+  } else if (activeTool === 'door') {
+    layerSelect.value = 'doors';
+  }
+
+  updateStatus();
+}
+
+function updateStatus() {
+  document.getElementById('status-tool').textContent = 'Tool: ' + capitalize(activeTool);
+  document.getElementById('status-layer').textContent = 'Layer: ' + capitalize(document.getElementById('active-layer').value);
+  const tileDef = TILE_DEFS.find(t => t.id === activeTileId);
+  document.getElementById('status-tile').textContent = 'Tile: ' + (tileDef ? tileDef.name : activeTileId);
+}
+
+// ===== Event Binding =====
+function bindEvents() {
+  // Tool buttons
+  document.querySelectorAll('.tool-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTool = btn.dataset.tool;
+      updateToolUI();
+    });
+  });
+
+  // Canvas events
+  canvas.addEventListener('mousedown', onCanvasMouseDown);
+  canvas.addEventListener('mousemove', onCanvasMouseMove);
+  canvas.addEventListener('mouseup', onCanvasMouseUp);
+  canvas.addEventListener('mouseleave', onCanvasMouseLeave);
+  canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
+  canvas.addEventListener('contextmenu', onCanvasContextMenu);
+
+  // Container resize
+  window.addEventListener('resize', resizeCanvas);
+
+  // Keyboard
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+
+  // Top bar
+  document.getElementById('btn-resize').addEventListener('click', onResizeMap);
+  document.getElementById('btn-save').addEventListener('click', saveMapToFile);
+  document.getElementById('btn-load').addEventListener('click', () => document.getElementById('file-input').click());
+  document.getElementById('btn-new').addEventListener('click', onNewMap);
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
+  document.getElementById('btn-zoom-in').addEventListener('click', () => setZoom(zoom + ZOOM_STEP));
+  document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(zoom - ZOOM_STEP));
+  document.getElementById('btn-zoom-fit').addEventListener('click', zoomToFit);
+  document.getElementById('file-input').addEventListener('change', loadMapFromFile);
+
+  document.getElementById('active-layer').addEventListener('change', (e) => {
+    const layer = e.target.value;
+    if (layer === 'ground') activeTool = 'brush';
+    else if (layer === 'collision') activeTool = 'collision';
+    else if (layer === 'objects') activeTool = 'object';
+    else if (layer === 'doors') activeTool = 'door';
+    updateToolUI();
+  });
+
+  // Brush size
+  document.getElementById('brush-size').addEventListener('input', (e) => {
+    brushSize = parseInt(e.target.value);
+    document.getElementById('brush-size-label').textContent = brushSize;
+  });
+
+  // Visibility toggles
+  ['ground', 'collision', 'objects', 'doors', 'grid', 'spawn'].forEach(key => {
+    document.getElementById('vis-' + key).addEventListener('change', (e) => {
+      visibility[key] = e.target.checked;
+      if (key === 'grid') showGrid = e.target.checked;
+    });
+  });
+
+  // Door modal
+  document.getElementById('door-cancel').addEventListener('click', closeDoorModal);
+  document.getElementById('door-save').addEventListener('click', saveDoorModal);
+  document.getElementById('door-delete').addEventListener('click', deleteDoorModal);
+
+  // Context menu
+  document.addEventListener('click', () => hideContextMenu());
+  document.querySelectorAll('.context-menu-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleContextAction(item.dataset.action);
+      hideContextMenu();
+    });
+  });
+}
+
+// ===== Canvas Coordinate Helpers =====
+function canvasToWorld(cx, cy) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (cx - rect.left - panX) / zoom;
+  const y = (cy - rect.top - panY) / zoom;
+  return { x, y };
+}
+
+function worldToTile(wx, wy) {
+  return {
+    tx: Math.floor(wx / TILE_SIZE),
+    ty: Math.floor(wy / TILE_SIZE)
+  };
+}
+
+function isInBounds(tx, ty) {
+  return tx >= 0 && ty >= 0 && tx < mapData.width && ty < mapData.height;
+}
+
+// ===== Mouse Handlers =====
+let lastContextWorld = { x: 0, y: 0 };
+
+function onCanvasMouseDown(e) {
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    // Middle click or alt+click = pan
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartPanX = panX;
+    panStartPanY = panY;
+    canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+    return;
+  }
+
+  if (e.button === 2) return; // right click handled by context menu
+
+  const world = canvasToWorld(e.clientX, e.clientY);
+  const tile = worldToTile(world.x, world.y);
+
+  if (activeTool === 'door') {
+    // Check if clicking existing door
+    const clickedDoor = findDoorAt(world.x, world.y);
+    if (clickedDoor !== -1) {
+      selectedDoorIndex = clickedDoor;
+      openDoorModal(mapData.doors[clickedDoor]);
+      return;
+    }
+    // Start drawing door rect
+    isDrawing = true;
+    drawStartX = world.x;
+    drawStartY = world.y;
+    doorDragRect = { x: world.x, y: world.y, width: 0, height: 0 };
+    return;
+  }
+
+  if (activeTool === 'select') {
+    // Try to select an object or door
+    const objIdx = findObjectAt(world.x, world.y);
+    if (objIdx !== -1) {
+      selectedObjectIndex = objIdx;
+      const obj = mapData.objects[objIdx];
+      dragOffset = { x: world.x - obj.x, y: world.y - obj.y };
+      isDrawing = true;
+      return;
+    }
+    const doorIdx = findDoorAt(world.x, world.y);
+    if (doorIdx !== -1) {
+      selectedDoorIndex = doorIdx;
+      openDoorModal(mapData.doors[doorIdx]);
+      return;
+    }
+    selectedObjectIndex = -1;
+    selectedDoorIndex = -1;
+    return;
+  }
+
+  if (activeTool === 'spawn') {
+    pushUndo();
+    mapData.playerSpawn = { x: Math.round(world.x), y: Math.round(world.y) };
+    toast('Spawn point set to (' + mapData.playerSpawn.x + ', ' + mapData.playerSpawn.y + ')', 'success');
+    return;
+  }
+
+  if (activeTool === 'object') {
+    pushUndo();
+    const objDef = OBJECT_DEFS.find(d => d.type === activeObjectType);
+    if (objDef) {
+      mapData.objects.push({
+        type: activeObjectType,
+        x: Math.round(world.x),
+        y: Math.round(world.y)
+      });
+    }
+    return;
+  }
+
+  if (activeTool === 'fill') {
+    if (!isInBounds(tile.tx, tile.ty)) return;
+    pushUndo();
+    floodFill(tile.tx, tile.ty, activeTileId);
+    return;
+  }
+
+  // Brush, eraser, collision
+  isDrawing = true;
+  applyToolAt(tile.tx, tile.ty, true);
+}
+
+function onCanvasMouseMove(e) {
+  const world = canvasToWorld(e.clientX, e.clientY);
+  const tile = worldToTile(world.x, world.y);
+
+  // Update status bar
+  document.getElementById('status-pos').textContent = 'Tile: ' + tile.tx + ', ' + tile.ty;
+  document.getElementById('status-pixel').textContent = 'Px: ' + Math.round(world.x) + ', ' + Math.round(world.y);
+
+  if (isPanning) {
+    panX = panStartPanX + (e.clientX - panStartX);
+    panY = panStartPanY + (e.clientY - panStartY);
+    return;
+  }
+
+  if (isDrawing && activeTool === 'door' && doorDragRect) {
+    const x = Math.min(drawStartX, world.x);
+    const y = Math.min(drawStartY, world.y);
+    const w = Math.abs(world.x - drawStartX);
+    const h = Math.abs(world.y - drawStartY);
+    doorDragRect = { x: Math.round(x), y: Math.round(y), width: Math.round(w), height: Math.round(h) };
+    return;
+  }
+
+  if (isDrawing && activeTool === 'select' && selectedObjectIndex !== -1 && dragOffset) {
+    mapData.objects[selectedObjectIndex].x = Math.round(world.x - dragOffset.x);
+    mapData.objects[selectedObjectIndex].y = Math.round(world.y - dragOffset.y);
+    return;
+  }
+
+  if (isDrawing && (activeTool === 'brush' || activeTool === 'eraser' || activeTool === 'collision')) {
+    applyToolAt(tile.tx, tile.ty, false);
+  }
+}
+
+function onCanvasMouseUp(e) {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = 'crosshair';
+    return;
+  }
+
+  if (isDrawing && activeTool === 'door' && doorDragRect) {
+    if (doorDragRect.width > 2 && doorDragRect.height > 2) {
+      selectedDoorIndex = -1;
+      openDoorModal({
+        x: doorDragRect.x,
+        y: doorDragRect.y,
+        width: doorDragRect.width,
+        height: doorDragRect.height,
+        targetMap: 'house_interior',
+        targetX: 100,
+        targetY: 100
+      });
+    }
+    doorDragRect = null;
+    isDrawing = false;
+    return;
+  }
+
+  if (isDrawing && activeTool === 'select') {
+    dragOffset = null;
+    isDrawing = false;
+    return;
+  }
+
+  isDrawing = false;
+}
+
+function onCanvasMouseLeave() {
+  if (!isPanning) isDrawing = false;
+}
+
+function onCanvasWheel(e) {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+  const world = canvasToWorld(e.clientX, e.clientY);
+
+  const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
+  if (newZoom === zoom) return;
+
+  // Zoom towards mouse position
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  panX = mx - (world.x * newZoom);
+  panY = my - (world.y * newZoom);
+  zoom = newZoom;
+
+  document.getElementById('zoom-label').textContent = 'Zoom: ' + zoom.toFixed(1) + 'x';
+}
+
+function onCanvasContextMenu(e) {
+  e.preventDefault();
+  const world = canvasToWorld(e.clientX, e.clientY);
+  lastContextWorld = world;
+
+  // Eyedropper on right-click
+  const tile = worldToTile(world.x, world.y);
+  if (isInBounds(tile.tx, tile.ty)) {
+    const pickedId = mapData.layers.ground[tile.ty][tile.tx];
+    activeTileId = pickedId;
+    activeTool = 'brush';
+    updateToolUI();
+    updateTilePaletteUI();
+    const tileDef = TILE_DEFS.find(t => t.id === pickedId);
+    toast('Picked tile: ' + (tileDef ? tileDef.name : pickedId), 'info');
+  }
+}
+
+// ===== Tool Application =====
+let lastAppliedTile = null;
+
+function applyToolAt(tx, ty, isNew) {
+  if (isNew) {
+    pushUndo();
+    lastAppliedTile = null;
+  }
+
+  const half = Math.floor(brushSize / 2);
+
+  for (let dy = -half; dy < brushSize - half; dy++) {
+    for (let dx = -half; dx < brushSize - half; dx++) {
+      const cx = tx + dx;
+      const cy = ty + dy;
+      if (!isInBounds(cx, cy)) continue;
+
+      const key = cx + ',' + cy;
+      if (!isNew && key === lastAppliedTile) continue;
+
+      if (activeTool === 'brush') {
+        mapData.layers.ground[cy][cx] = activeTileId;
+      } else if (activeTool === 'eraser') {
+        mapData.layers.ground[cy][cx] = 0;
+        mapData.layers.collision[cy][cx] = 0;
+      } else if (activeTool === 'collision') {
+        mapData.layers.collision[cy][cx] = mapData.layers.collision[cy][cx] ? 0 : 1;
+      }
+    }
+  }
+
+  lastAppliedTile = tx + ',' + ty;
+}
+
+// ===== Flood Fill =====
+function floodFill(startX, startY, fillId) {
+  const targetId = mapData.layers.ground[startY][startX];
+  if (targetId === fillId) return;
+
+  const stack = [[startX, startY]];
+  const visited = new Set();
+
+  while (stack.length > 0) {
+    const [x, y] = stack.pop();
+    const key = x + ',' + y;
+    if (visited.has(key)) continue;
+    if (!isInBounds(x, y)) continue;
+    if (mapData.layers.ground[y][x] !== targetId) continue;
+
+    visited.add(key);
+    mapData.layers.ground[y][x] = fillId;
+
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+}
+
+// ===== Object/Door Finding =====
+function findObjectAt(wx, wy) {
+  for (let i = mapData.objects.length - 1; i >= 0; i--) {
+    const obj = mapData.objects[i];
+    const def = OBJECT_DEFS.find(d => d.type === obj.type);
+    if (!def) continue;
+    const ow = def.naturalW || def.w;
+    const oh = def.naturalH || def.h;
+    // Objects placed by their top-left corner
+    if (wx >= obj.x && wx <= obj.x + ow && wy >= obj.y && wy <= obj.y + oh) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function findDoorAt(wx, wy) {
+  for (let i = mapData.doors.length - 1; i >= 0; i--) {
+    const d = mapData.doors[i];
+    if (wx >= d.x && wx <= d.x + d.width && wy >= d.y && wy <= d.y + d.height) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// ===== Door Modal =====
+function openDoorModal(door) {
+  document.getElementById('door-target-map').value = door.targetMap || 'house_interior';
+  document.getElementById('door-target-x').value = door.targetX || 100;
+  document.getElementById('door-target-y').value = door.targetY || 100;
+  document.getElementById('door-width').value = door.width || 16;
+  document.getElementById('door-height').value = door.height || 16;
+  document.getElementById('door-modal').classList.add('visible');
+
+  // Store temporary door data
+  document.getElementById('door-modal')._doorData = door;
+  document.getElementById('door-delete').style.display = selectedDoorIndex >= 0 ? '' : 'none';
+}
+
+function closeDoorModal() {
+  document.getElementById('door-modal').classList.remove('visible');
+  doorDragRect = null;
+  selectedDoorIndex = -1;
+}
+
+function saveDoorModal() {
+  const modal = document.getElementById('door-modal');
+  const doorData = modal._doorData;
+
+  const newDoor = {
+    x: doorData.x,
+    y: doorData.y,
+    width: parseInt(document.getElementById('door-width').value) || doorData.width,
+    height: parseInt(document.getElementById('door-height').value) || doorData.height,
+    targetMap: document.getElementById('door-target-map').value,
+    targetX: parseInt(document.getElementById('door-target-x').value) || 100,
+    targetY: parseInt(document.getElementById('door-target-y').value) || 100,
+  };
+
+  pushUndo();
+  if (selectedDoorIndex >= 0) {
+    mapData.doors[selectedDoorIndex] = newDoor;
+  } else {
+    mapData.doors.push(newDoor);
+  }
+
+  closeDoorModal();
+  toast('Door saved.', 'success');
+}
+
+function deleteDoorModal() {
+  if (selectedDoorIndex >= 0) {
+    pushUndo();
+    mapData.doors.splice(selectedDoorIndex, 1);
+    toast('Door deleted.', 'info');
+  }
+  closeDoorModal();
+}
+
+// ===== Context Menu =====
+function showContextMenu(x, y) {
+  const menu = document.getElementById('context-menu');
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.classList.add('visible');
+}
+
+function hideContextMenu() {
+  document.getElementById('context-menu').classList.remove('visible');
+}
+
+function handleContextAction(action) {
+  const world = lastContextWorld;
+  const tile = worldToTile(world.x, world.y);
+
+  switch (action) {
+    case 'eyedropper':
+      if (isInBounds(tile.tx, tile.ty)) {
+        activeTileId = mapData.layers.ground[tile.ty][tile.tx];
+        activeTool = 'brush';
+        updateToolUI();
+        updateTilePaletteUI();
+      }
+      break;
+    case 'delete-object': {
+      const idx = findObjectAt(world.x, world.y);
+      if (idx !== -1) {
+        pushUndo();
+        mapData.objects.splice(idx, 1);
+        toast('Object deleted.', 'info');
+      }
+      break;
+    }
+    case 'edit-door': {
+      const doorIdx = findDoorAt(world.x, world.y);
+      if (doorIdx !== -1) {
+        selectedDoorIndex = doorIdx;
+        openDoorModal(mapData.doors[doorIdx]);
+      }
+      break;
+    }
+    case 'set-spawn':
+      pushUndo();
+      mapData.playerSpawn = { x: Math.round(world.x), y: Math.round(world.y) };
+      toast('Spawn set.', 'success');
+      break;
+  }
+}
+
+// ===== Keyboard =====
+let keysDown = {};
+
+function onKeyDown(e) {
+  // Don't intercept if typing in an input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+    // But still handle Ctrl+S/Ctrl+O in inputs
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveMapToFile(); }
+    if (e.ctrlKey && e.key === 'o') { e.preventDefault(); document.getElementById('file-input').click(); }
+    return;
+  }
+
+  keysDown[e.key] = true;
+
+  // Ctrl shortcuts
+  if (e.ctrlKey) {
+    if (e.key === 's') { e.preventDefault(); saveMapToFile(); return; }
+    if (e.key === 'o') { e.preventDefault(); document.getElementById('file-input').click(); return; }
+    if (e.key === 'z') { e.preventDefault(); undo(); return; }
+    if (e.key === 'y') { e.preventDefault(); redo(); return; }
+  }
+
+  // Shift+G = toggle grid
+  if (e.shiftKey && e.key === 'G') {
+    showGrid = !showGrid;
+    visibility.grid = showGrid;
+    document.getElementById('vis-grid').checked = showGrid;
+    return;
+  }
+
+  switch (e.key.toLowerCase()) {
+    case 'b': activeTool = 'brush'; updateToolUI(); break;
+    case 'e': activeTool = 'eraser'; updateToolUI(); break;
+    case 'f': activeTool = 'fill'; updateToolUI(); break;
+    case 'c': activeTool = 'collision'; updateToolUI(); break;
+    case 'd': activeTool = 'door'; updateToolUI(); break;
+    case 'v': activeTool = 'select'; updateToolUI(); break;
+    case 'x': activeTool = 'spawn'; updateToolUI(); break;
+    case 'g':
+      activeTileId = 0; activeTool = 'brush'; updateToolUI(); updateTilePaletteUI(); break;
+    case 'w':
+      activeTileId = 1; activeTool = 'brush'; updateToolUI(); updateTilePaletteUI(); break;
+    case 'p':
+      activeTileId = 2; activeTool = 'brush'; updateToolUI(); updateTilePaletteUI(); break;
+    case '=': case '+': setZoom(zoom + ZOOM_STEP); break;
+    case '-': case '_': setZoom(zoom - ZOOM_STEP); break;
+    case '0': setZoom(DEFAULT_ZOOM); break;
+    case '[': brushSize = Math.max(1, brushSize - 1); updateBrushUI(); break;
+    case ']': brushSize = Math.min(10, brushSize + 1); updateBrushUI(); break;
+  }
+}
+
+function onKeyUp(e) {
+  delete keysDown[e.key];
+}
+
+function updateBrushUI() {
+  document.getElementById('brush-size').value = brushSize;
+  document.getElementById('brush-size-label').textContent = brushSize;
+}
+
+// ===== Zoom =====
+function setZoom(newZoom) {
+  const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(newZoom * 4) / 4));
+  if (clamped === zoom) return;
+
+  // Zoom towards center of viewport
+  const rect = container.getBoundingClientRect();
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
+  const worldX = (cx - panX) / zoom;
+  const worldY = (cy - panY) / zoom;
+
+  zoom = clamped;
+  panX = cx - worldX * zoom;
+  panY = cy - worldY * zoom;
+
+  document.getElementById('zoom-label').textContent = 'Zoom: ' + zoom.toFixed(1) + 'x';
+}
+
+function zoomToFit() {
+  const rect = container.getBoundingClientRect();
+  const mapW = mapData.width * TILE_SIZE;
+  const mapH = mapData.height * TILE_SIZE;
+  const padding = 40;
+
+  const scaleX = (rect.width - padding * 2) / mapW;
+  const scaleY = (rect.height - padding * 2) / mapH;
+  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(scaleX, scaleY)));
+  zoom = Math.round(zoom * 4) / 4;
+
+  panX = (rect.width - mapW * zoom) / 2;
+  panY = (rect.height - mapH * zoom) / 2;
+
+  document.getElementById('zoom-label').textContent = 'Zoom: ' + zoom.toFixed(1) + 'x';
+}
+
+// ===== Canvas Resize =====
+function resizeCanvas() {
+  const rect = container.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ===== Render Loop =====
+function renderLoop() {
+  render();
+  requestAnimationFrame(renderLoop);
+}
+
+function render() {
+  const rect = container.getBoundingClientRect();
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
+
+  // Image smoothing off for pixel art
+  ctx.imageSmoothingEnabled = false;
+
+  const mapW = mapData.width;
+  const mapH = mapData.height;
+
+  // Calculate visible tile range for culling
+  const visLeft = Math.max(0, Math.floor(-panX / zoom / TILE_SIZE) - 1);
+  const visTop = Math.max(0, Math.floor(-panY / zoom / TILE_SIZE) - 1);
+  const visRight = Math.min(mapW, Math.ceil((rect.width - panX) / zoom / TILE_SIZE) + 1);
+  const visBottom = Math.min(mapH, Math.ceil((rect.height - panY) / zoom / TILE_SIZE) + 1);
+
+  // Draw map border/background
+  ctx.fillStyle = '#0a0a18';
+  ctx.fillRect(0, 0, mapW * TILE_SIZE, mapH * TILE_SIZE);
+
+  // Ground layer
+  if (visibility.ground) {
+    for (let y = visTop; y < visBottom; y++) {
+      for (let x = visLeft; x < visRight; x++) {
+        const tileId = mapData.layers.ground[y]?.[x];
+        const img = tileImages[tileId];
+        if (img && img.complete && img.naturalWidth) {
+          ctx.drawImage(img, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        } else {
+          // Fallback color
+          ctx.fillStyle = tileId === 1 ? '#2980b9' : tileId === 2 ? '#d4a843' : '#27ae60';
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  // Collision overlay
+  if (visibility.collision) {
+    for (let y = visTop; y < visBottom; y++) {
+      for (let x = visLeft; x < visRight; x++) {
+        if (mapData.layers.collision[y]?.[x]) {
+          ctx.fillStyle = 'var(--collision-color)';
+          ctx.fillStyle = 'rgba(231, 76, 60, 0.35)';
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+          // X pattern
+          ctx.strokeStyle = 'rgba(231, 76, 60, 0.7)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(x * TILE_SIZE + 1, y * TILE_SIZE + 1);
+          ctx.lineTo((x + 1) * TILE_SIZE - 1, (y + 1) * TILE_SIZE - 1);
+          ctx.moveTo((x + 1) * TILE_SIZE - 1, y * TILE_SIZE + 1);
+          ctx.lineTo(x * TILE_SIZE + 1, (y + 1) * TILE_SIZE - 1);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // Objects
+  if (visibility.objects) {
+    mapData.objects.forEach((obj, idx) => {
+      const img = objectImages[obj.type];
+      const def = OBJECT_DEFS.find(d => d.type === obj.type);
+      if (img && img.complete && img.naturalWidth && def) {
+        const w = def.naturalW || def.w;
+        const h = def.naturalH || def.h;
+        ctx.drawImage(img, obj.x, obj.y, w, h);
+        // Highlight selected object
+        if (idx === selectedObjectIndex && activeTool === 'select') {
+          ctx.strokeStyle = '#e94560';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeRect(obj.x - 1, obj.y - 1, w + 2, h + 2);
+          ctx.setLineDash([]);
+        }
+      } else {
+        // Fallback
+        ctx.fillStyle = 'rgba(155, 89, 182, 0.5)';
+        ctx.fillRect(obj.x, obj.y, 16, 16);
+        ctx.fillStyle = '#fff';
+        ctx.font = '6px sans-serif';
+        ctx.fillText(obj.type, obj.x + 1, obj.y + 10);
+      }
+    });
+  }
+
+  // Doors
+  if (visibility.doors) {
+    mapData.doors.forEach((door, idx) => {
+      ctx.fillStyle = 'rgba(155, 89, 182, 0.35)';
+      ctx.fillRect(door.x, door.y, door.width, door.height);
+      ctx.strokeStyle = 'rgba(155, 89, 182, 0.8)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(door.x, door.y, door.width, door.height);
+
+      // Label
+      ctx.fillStyle = '#fff';
+      ctx.font = Math.max(4, Math.min(8, door.height * 0.5)) + 'px sans-serif';
+      ctx.fillText(door.targetMap || 'door', door.x + 2, door.y + door.height - 2);
+    });
+
+    // Door drag preview
+    if (doorDragRect && isDrawing) {
+      ctx.fillStyle = 'rgba(155, 89, 182, 0.25)';
+      ctx.fillRect(doorDragRect.x, doorDragRect.y, doorDragRect.width, doorDragRect.height);
+      ctx.strokeStyle = 'rgba(155, 89, 182, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(doorDragRect.x, doorDragRect.y, doorDragRect.width, doorDragRect.height);
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Spawn point
+  if (visibility.spawn && mapData.playerSpawn) {
+    const sp = mapData.playerSpawn;
+    ctx.fillStyle = 'rgba(46, 204, 113, 0.6)';
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#2ecc71';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Cross
+    ctx.beginPath();
+    ctx.moveTo(sp.x - 8, sp.y);
+    ctx.lineTo(sp.x + 8, sp.y);
+    ctx.moveTo(sp.x, sp.y - 8);
+    ctx.lineTo(sp.x, sp.y + 8);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '5px sans-serif';
+    ctx.fillText('SPAWN', sp.x - 10, sp.y - 9);
+  }
+
+  // Grid
+  if (visibility.grid && zoom >= 1) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 0.5 / zoom;
+    ctx.beginPath();
+    for (let x = visLeft; x <= visRight; x++) {
+      ctx.moveTo(x * TILE_SIZE, visTop * TILE_SIZE);
+      ctx.lineTo(x * TILE_SIZE, visBottom * TILE_SIZE);
+    }
+    for (let y = visTop; y <= visBottom; y++) {
+      ctx.moveTo(visLeft * TILE_SIZE, y * TILE_SIZE);
+      ctx.lineTo(visRight * TILE_SIZE, y * TILE_SIZE);
+    }
+    ctx.stroke();
+
+    // Map border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1 / zoom;
+    ctx.strokeRect(0, 0, mapW * TILE_SIZE, mapH * TILE_SIZE);
+  }
+
+  // Brush preview (ghost cursor)
+  if (!isPanning && !isDrawing) {
+    const mRect = container.getBoundingClientRect();
+    // We can't easily get mouse position here without storing it, so skip ghost cursor in render
+  }
+
+  ctx.restore();
+}
+
+// ===== Undo / Redo =====
+function pushUndo() {
+  const snapshot = {
+    ground: mapData.layers.ground.map(row => [...row]),
+    collision: mapData.layers.collision.map(row => [...row]),
+    objects: JSON.parse(JSON.stringify(mapData.objects)),
+    doors: JSON.parse(JSON.stringify(mapData.doors)),
+    playerSpawn: { ...mapData.playerSpawn }
+  };
+  undoStack.push(snapshot);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function undo() {
+  if (undoStack.length === 0) { toast('Nothing to undo.', 'info'); return; }
+  const current = {
+    ground: mapData.layers.ground.map(row => [...row]),
+    collision: mapData.layers.collision.map(row => [...row]),
+    objects: JSON.parse(JSON.stringify(mapData.objects)),
+    doors: JSON.parse(JSON.stringify(mapData.doors)),
+    playerSpawn: { ...mapData.playerSpawn }
+  };
+  redoStack.push(current);
+
+  const snapshot = undoStack.pop();
+  mapData.layers.ground = snapshot.ground;
+  mapData.layers.collision = snapshot.collision;
+  mapData.objects = snapshot.objects;
+  mapData.doors = snapshot.doors;
+  mapData.playerSpawn = snapshot.playerSpawn;
+
+  toast('Undo', 'info');
+}
+
+function redo() {
+  if (redoStack.length === 0) { toast('Nothing to redo.', 'info'); return; }
+  const current = {
+    ground: mapData.layers.ground.map(row => [...row]),
+    collision: mapData.layers.collision.map(row => [...row]),
+    objects: JSON.parse(JSON.stringify(mapData.objects)),
+    doors: JSON.parse(JSON.stringify(mapData.doors)),
+    playerSpawn: { ...mapData.playerSpawn }
+  };
+  undoStack.push(current);
+
+  const snapshot = redoStack.pop();
+  mapData.layers.ground = snapshot.ground;
+  mapData.layers.collision = snapshot.collision;
+  mapData.objects = snapshot.objects;
+  mapData.doors = snapshot.doors;
+  mapData.playerSpawn = snapshot.playerSpawn;
+
+  toast('Redo', 'info');
+}
+
+// ===== Save / Load =====
+function buildMapJSON() {
+  return {
+    name: document.getElementById('map-name').value || 'untitled',
+    width: mapData.width,
+    height: mapData.height,
+    tileSize: TILE_SIZE,
+    layers: {
+      ground: mapData.layers.ground,
+      collision: mapData.layers.collision
+    },
+    objects: mapData.objects,
+    doors: mapData.doors,
+    playerSpawn: mapData.playerSpawn
+  };
+}
+
+function saveMapToFile() {
+  const json = JSON.stringify(buildMapJSON(), null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (document.getElementById('map-name').value || 'map') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Map saved as ' + a.download, 'success');
+}
+
+function loadMapFromFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      loadMapData(data);
+      toast('Map loaded: ' + (data.name || file.name), 'success');
+    } catch (err) {
+      toast('Error loading map: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function loadMapData(data) {
+  pushUndo();
+  mapData.name = data.name || 'untitled';
+  mapData.width = data.width || 50;
+  mapData.height = data.height || 38;
+  mapData.tileSize = data.tileSize || TILE_SIZE;
+  mapData.layers.ground = data.layers?.ground || [];
+  mapData.layers.collision = data.layers?.collision || [];
+  mapData.objects = data.objects || [];
+  mapData.doors = data.doors || [];
+  mapData.playerSpawn = data.playerSpawn || { x: 200, y: 128 };
+
+  // Validate/pad layers
+  initMap(mapData.width, mapData.height);
+
+  document.getElementById('map-name').value = mapData.name;
+  document.getElementById('map-width').value = mapData.width;
+  document.getElementById('map-height').value = mapData.height;
+
+  zoomToFit();
+}
+
+// ===== Map Operations =====
+function onResizeMap() {
+  const newW = parseInt(document.getElementById('map-width').value) || 50;
+  const newH = parseInt(document.getElementById('map-height').value) || 38;
+
+  if (newW === mapData.width && newH === mapData.height) return;
+
+  pushUndo();
+
+  const oldGround = mapData.layers.ground;
+  const oldCollision = mapData.layers.collision;
+
+  mapData.layers.ground = Array.from({ length: newH }, (_, y) =>
+    Array.from({ length: newW }, (_, x) =>
+      (y < oldGround.length && x < (oldGround[y]?.length || 0)) ? oldGround[y][x] : 0
+    )
+  );
+  mapData.layers.collision = Array.from({ length: newH }, (_, y) =>
+    Array.from({ length: newW }, (_, x) =>
+      (y < oldCollision.length && x < (oldCollision[y]?.length || 0)) ? oldCollision[y][x] : 0
+    )
+  );
+
+  mapData.width = newW;
+  mapData.height = newH;
+
+  toast('Map resized to ' + newW + 'x' + newH, 'success');
+}
+
+function onNewMap() {
+  if (!confirm('Create a new empty map? Unsaved changes will be lost.')) return;
+
+  const w = parseInt(document.getElementById('map-width').value) || 50;
+  const h = parseInt(document.getElementById('map-height').value) || 38;
+
+  mapData.name = document.getElementById('map-name').value || 'untitled';
+  mapData.width = w;
+  mapData.height = h;
+  mapData.layers.ground = Array.from({ length: h }, () => Array(w).fill(0));
+  mapData.layers.collision = Array.from({ length: h }, () => Array(w).fill(0));
+  mapData.objects = [];
+  mapData.doors = [];
+  mapData.playerSpawn = { x: Math.round(w * TILE_SIZE / 2), y: Math.round(h * TILE_SIZE / 2) };
+
+  undoStack.length = 0;
+  redoStack.length = 0;
+
+  zoomToFit();
+  toast('New map created.', 'success');
+}
+
+// ===== Toast =====
+function toast(message, type) {
+  type = type || 'info';
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0.3s';
+    setTimeout(() => el.remove(), 300);
+  }, 2500);
+}
+
+// ===== Utility =====
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+// ===== Start =====
+init();
+zoomToFit();
+
+})();
+</script>
+</body>
+</html>
