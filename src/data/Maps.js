@@ -39,8 +39,8 @@ export const OVERWORLD_MAP = {
     { x: 706, y: 248, width: 32, height: 16, targetMap: 'inn_interior', targetX: 88, targetY: 128 },
     { x: 48, y: 80, width: 24, height: 14, targetMap: 'cave', targetX: 160, targetY: 230 },
     { x: 680, y: 160, width: 24, height: 14, targetMap: 'desert_temple', targetX: 160, targetY: 200 },
-    // Forest entrance — now leads to outdoor forest map
-    { x: 80, y: 420, width: 24, height: 14, targetMap: 'forest', targetX: 320, targetY: 530 },
+    // Forest entrance — wide path leading to outdoor forest
+    { x: 65, y: 418, width: 48, height: 24, targetMap: 'forest', targetX: 320, targetY: 520 },
     // Second house door
     { x: 836, y: 188, width: 32, height: 16, targetMap: 'house_interior', targetX: 88, targetY: 128 },
   ],
@@ -330,16 +330,16 @@ export const FOREST_MAP = {
   layers: {
     ground: null,
     collision: [
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1],
       [1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1],
       [1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1],
-      [1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1],
-      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0],
+      [1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
       [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1],
       [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
@@ -364,7 +364,7 @@ export const FOREST_MAP = {
       [1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     ],
   },
   enemies: [
@@ -383,14 +383,14 @@ export const FOREST_MAP = {
     { id: 'forest_chest_2', x: 420, y: 280, contents: { gold: 30 } },
   ],
   doors: [
-    // South entrance — back to overworld
-    { x: 256, y: 540, width: 128, height: 10, targetMap: 'overworld', targetX: 100, targetY: 430 },
-    // North entrance — to boss room
-    { x: 144, y: 20, width: 32, height: 10, targetMap: 'forest_boss', targetX: 96, targetY: 180 },
-    // East exit — to town2 (Woodhaven)
-    { x: 624, y: 128, width: 10, height: 32, targetMap: 'town2', targetX: 30, targetY: 220 },
+    // South exit — walk off bottom edge to overworld
+    { x: 256, y: 548, width: 128, height: 24, targetMap: 'overworld', targetX: 100, targetY: 400 },
+    // North exit — walk off top edge to boss room
+    { x: 144, y: 4, width: 64, height: 20, targetMap: 'forest_boss', targetX: 96, targetY: 180 },
+    // East exit — walk off right edge to town2 (Woodhaven)
+    { x: 632, y: 120, width: 20, height: 80, targetMap: 'town2', targetX: 30, targetY: 220 },
   ],
-  playerSpawn: { x: 320, y: 530 },
+  playerSpawn: { x: 320, y: 520 },
 };
 
 export const FOREST_BOSS_MAP = {
@@ -445,8 +445,8 @@ export const TOWN2_MAP = {
     { type: 'house-wood', x: 420, y: 180 },
   ],
   doors: [
-    // West exit — back to forest
-    { x: 0, y: 208, width: 10, height: 32, targetMap: 'forest', targetX: 600, targetY: 128 },
+    // West exit — walk off left edge back to forest
+    { x: 0, y: 200, width: 16, height: 64, targetMap: 'forest', targetX: 610, targetY: 128 },
     // Shop door
     { x: 266, y: 88, width: 32, height: 16, targetMap: 'town2_shop', targetX: 88, targetY: 128 },
     // Inn door

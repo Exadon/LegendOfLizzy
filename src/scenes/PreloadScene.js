@@ -478,26 +478,38 @@ export class PreloadScene extends Phaser.Scene {
       frameRate: 8, repeat: -1,
     });
 
-    // --- Orc animations (32x32, 6 cols x 10 rows) ---
-    const ORC_COLS = 6;
+    // --- Orc animations (32x32, 16 cols x 16 rows — 512x512 sheet) ---
+    // Row 0: idle-down (4 frames), Row 1: idle-right (4), Row 2: idle-up (4)
+    // Row 5: walk-down (8), Row 6: walk-right (8), Row 7: walk-up (8)
+    const ORC_COLS = 16;
     this.anims.create({
       key: 'orc-idle-down',
-      frames: this.anims.generateFrameNumbers('orc-grunt', { start: 0, end: 5 }),
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: 0, end: 3 }),
+      frameRate: 6, repeat: -1,
+    });
+    this.anims.create({
+      key: 'orc-idle-right',
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS, end: ORC_COLS + 3 }),
+      frameRate: 6, repeat: -1,
+    });
+    this.anims.create({
+      key: 'orc-idle-up',
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 2, end: ORC_COLS * 2 + 3 }),
       frameRate: 6, repeat: -1,
     });
     this.anims.create({
       key: 'orc-walk-down',
-      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 3, end: ORC_COLS * 3 + 5 }),
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 5, end: ORC_COLS * 5 + 7 }),
       frameRate: 8, repeat: -1,
     });
     this.anims.create({
       key: 'orc-walk-right',
-      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 4, end: ORC_COLS * 4 + 5 }),
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 6, end: ORC_COLS * 6 + 7 }),
       frameRate: 8, repeat: -1,
     });
     this.anims.create({
       key: 'orc-walk-up',
-      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 5, end: ORC_COLS * 5 + 5 }),
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 7, end: ORC_COLS * 7 + 7 }),
       frameRate: 8, repeat: -1,
     });
 

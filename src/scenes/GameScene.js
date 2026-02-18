@@ -722,15 +722,45 @@ export class GameScene extends Phaser.Scene {
           }
         }
       }
-      // Dense tree walls for collision tiles
+      // Dense tree canopy fill for collision tiles + oak-tree sprites
       if (map.layers.collision) {
+        // Base: dark green fill for all collision tiles (forest canopy from above)
         for (let row = 0; row < map.height; row++) {
           for (let col = 0; col < map.width; col++) {
             if (map.layers.collision[row]?.[col] === 1) {
-              // Tree trunk
-              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2 + 2, 4, ts - 4, 0x553311).setDepth(0);
-              // Tree canopy (dark green)
-              this.add.circle(col * ts + ts / 2, row * ts + ts / 2 - 2, ts / 2, 0x1a4d1a).setDepth(1);
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x1a4d1a).setDepth(0);
+            }
+          }
+        }
+        // Place oak-tree sprites at edges of tree clusters (where collision meets walkable)
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] !== 1) continue;
+            // Check if this tile borders a walkable tile (edge of cluster)
+            const neighbors = [
+              map.layers.collision[row - 1]?.[col],
+              map.layers.collision[row + 1]?.[col],
+              map.layers.collision[row]?.[col - 1],
+              map.layers.collision[row]?.[col + 1],
+            ];
+            const isEdge = neighbors.some(n => n === 0 || n === undefined);
+            // Place tree sprites on edge tiles, spaced out
+            if (isEdge && (row + col) % 3 === 0) {
+              const tx = col * ts + ts / 2;
+              const ty = row * ts + ts / 2;
+              const tree = this.add.image(tx, ty - 8, 'oak-tree-small');
+              tree.setScale(0.5 + Math.random() * 0.2);
+              tree.setDepth(ty + 10);
+              tree.setTint(0xccddcc);
+            }
+            // Scatter a few interior trees too for depth
+            if (!isEdge && (row * 7 + col * 13) % 11 === 0) {
+              const tx = col * ts + ts / 2;
+              const ty = row * ts + ts / 2;
+              const tree = this.add.image(tx, ty - 6, 'oak-tree-small');
+              tree.setScale(0.4 + Math.random() * 0.15);
+              tree.setDepth(ty + 5);
+              tree.setTint(0xbbccbb);
             }
           }
         }
@@ -2986,18 +3016,17 @@ export class GameScene extends Phaser.Scene {
     const pillarR = this.add.zone(templeX + 18, templeY - 8, 8, 24);
     this.obstacles.add(pillarR);
 
-    // Forest extra trees (dense west forest)
+    // Forest extra trees (dense west forest) — use oak-tree sprites
     const forestTrees = [
       { x: 30, y: 280 }, { x: 60, y: 320 }, { x: 40, y: 360 },
       { x: 80, y: 400 }, { x: 50, y: 440 }, { x: 100, y: 350 },
       { x: 20, y: 480 }, { x: 70, y: 520 },
     ];
     for (const t of forestTrees) {
-      const trunk = this.add.rectangle(t.x, t.y, 6, 10, 0x553311);
-      trunk.setDepth(t.y);
-      const canopy = this.add.circle(t.x, t.y - 8, 8, 0x226622);
-      canopy.setDepth(t.y + 1);
-      const zone = this.add.zone(t.x, t.y, 8, 10);
+      const tree = this.add.image(t.x, t.y - 12, 'oak-tree-small');
+      tree.setScale(0.6);
+      tree.setDepth(t.y + 1);
+      const zone = this.add.zone(t.x, t.y, 10, 12);
       this.obstacles.add(zone);
     }
 
@@ -3058,17 +3087,20 @@ export class GameScene extends Phaser.Scene {
       fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#888866',
     }).setOrigin(0.5).setDepth(caveY + 1);
 
-    // Forest entrance — path leading south
+    // Forest entrance — wide dirt path with trees flanking
     const forestX = 80;
     const forestY = 420;
-    // Path stones leading to exit
-    for (let i = 0; i < 4; i++) {
-      this.add.rectangle(forestX + i * 6 - 9, forestY + i * 4, 6, 4, 0x887755).setDepth(forestY - 2);
+    // Dirt path leading south
+    for (let i = -2; i <= 2; i++) {
+      this.add.image(forestX + i * 16, forestY, 'path-middle').setOrigin(0.5);
+      this.add.image(forestX + i * 16, forestY + 16, 'path-middle').setOrigin(0.5);
     }
-    this.add.rectangle(forestX, forestY, 28, 16, 0x335533).setDepth(forestY - 1);
-    this.add.text(forestX, forestY - 14, 'FOREST', {
+    // Flanking trees
+    this.add.image(forestX - 30, forestY - 8, 'oak-tree-small').setScale(0.6).setDepth(forestY + 2);
+    this.add.image(forestX + 30, forestY - 8, 'oak-tree-small').setScale(0.6).setDepth(forestY + 2);
+    this.add.text(forestX, forestY - 20, 'FOREST', {
       fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#668866',
-    }).setOrigin(0.5).setDepth(forestY + 1);
+    }).setOrigin(0.5).setDepth(forestY + 3);
 
     // Signpost near forest entrance
     this.add.rectangle(120, 410, 2, 12, 0x664422).setDepth(411);

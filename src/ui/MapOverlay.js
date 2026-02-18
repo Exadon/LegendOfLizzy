@@ -18,18 +18,18 @@ export class MapOverlay {
       .setVisible(false);
 
     // Dark overlay background
-    const bg = scene.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7);
+    const bg = scene.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.75);
     this.container.add(bg);
 
     // Map frame
-    const mapW = 180;
-    const mapH = 140;
+    const mapW = 200;
+    const mapH = 150;
     const mapX = w / 2 - mapW / 2;
-    const mapY = h / 2 - mapH / 2 - 8;
+    const mapY = h / 2 - mapH / 2 - 6;
 
     const frame = scene.add.nineslice(
-      w / 2, h / 2 - 8, 'ui-frames', 'panel-green',
-      mapW + 12, mapH + 12, 8, 8, 8, 8
+      w / 2, h / 2 - 6, 'ui-frames', 'panel-green',
+      mapW + 14, mapH + 14, 8, 8, 8, 8
     );
     this.container.add(frame);
 
@@ -62,28 +62,32 @@ export class MapOverlay {
     this._labels = [];
 
     // Title
-    this.titleText = scene.add.text(w / 2, mapY - 10, 'WORLD MAP', {
-      fontSize: '12px',
+    this.titleText = scene.add.text(w / 2, mapY - 12, 'WORLD MAP', {
+      fontSize: '14px',
       fontFamily: 'Arial, sans-serif',
       color: '#ffdd00',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
     }).setOrigin(0.5);
     this.container.add(this.titleText);
 
     // Hint
-    this.hintText = scene.add.text(w / 2, h - 16, 'Press M to close', {
+    this.hintText = scene.add.text(w / 2, h - 14, 'Press M to close', {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
       color: '#aaaaaa',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5);
     this.container.add(this.hintText);
 
     // Teleport hint (shown when teleports are available)
-    this.teleportHint = scene.add.text(w / 2, h - 28, 'Press T to teleport', {
-      fontSize: '8px',
+    this.teleportHint = scene.add.text(w / 2, h - 26, 'Press T to teleport', {
+      fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
       color: '#88aaff',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5).setVisible(false);
     this.container.add(this.teleportHint);
 
@@ -109,8 +113,26 @@ export class MapOverlay {
     this._teleportMenuActive = false;
   }
 
+  // Shared label style helper
+  _labelStyle(color, size) {
+    return {
+      fontSize: (size || 8) + 'px',
+      fontFamily: 'Arial, sans-serif',
+      color: color || '#ddccaa',
+      stroke: '#000000',
+      strokeThickness: 2,
+    };
+  }
+
+  _addLabel(x, y, text, color, size) {
+    const label = this.scene.add.text(x, y, text, this._labelStyle(color, size)).setOrigin(0.5);
+    this.container.add(label);
+    this._labels.push(label);
+    return label;
+  }
+
   _drawOverworldMap(worldW, worldH) {
-    const { mapGfx, mapX, mapY, mapW, mapH, scene } = this;
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
 
     mapGfx.clear();
     mapGfx.fillStyle(0x4a8c3f); // green grass
@@ -120,7 +142,7 @@ export class MapOverlay {
     mapGfx.fillStyle(0x4488cc);
     const pondMX = mapX + (560 / worldW) * mapW;
     const pondMY = mapY + (280 / worldH) * mapH;
-    mapGfx.fillEllipse(pondMX, pondMY, 12, 8);
+    mapGfx.fillEllipse(pondMX, pondMY, 14, 10);
 
     // Paths (tan)
     mapGfx.fillStyle(0xc8a86e);
@@ -143,7 +165,7 @@ export class MapOverlay {
     for (const [tx, ty] of treePositions) {
       const mx = mapX + (tx / worldW) * mapW;
       const my = mapY + (ty / worldH) * mapH;
-      mapGfx.fillCircle(mx, my, 2);
+      mapGfx.fillCircle(mx, my, 3);
     }
 
     // Buildings (brown rectangles with labels)
@@ -158,12 +180,7 @@ export class MapOverlay {
       const bx = mapX + (b.x / worldW) * mapW;
       const by = mapY + (b.y / worldH) * mapH;
       mapGfx.fillRect(bx - 5, by - 4, 10, 8);
-      const label = scene.add.text(bx, by - 7, b.label, {
-        fontSize: '6px', fontFamily: 'Arial, sans-serif',
-        color: '#ddccaa', stroke: '#000000', strokeThickness: 1,
-      }).setOrigin(0.5);
-      this.container.add(label);
-      this._labels.push(label);
+      this._addLabel(bx, by - 8, b.label, '#ddccaa', 8);
     }
 
     // Dungeon entrances (red triangles)
@@ -176,13 +193,8 @@ export class MapOverlay {
     for (const e of entrances) {
       const ex = mapX + (e.x / worldW) * mapW;
       const ey = mapY + (e.y / worldH) * mapH;
-      mapGfx.fillTriangle(ex, ey - 3, ex - 3, ey + 2, ex + 3, ey + 2);
-      const label = scene.add.text(ex, ey + 4, e.label, {
-        fontSize: '6px', fontFamily: 'Arial, sans-serif',
-        color: '#ff8888', stroke: '#000000', strokeThickness: 1,
-      }).setOrigin(0.5);
-      this.container.add(label);
-      this._labels.push(label);
+      mapGfx.fillTriangle(ex, ey - 4, ex - 4, ey + 3, ex + 4, ey + 3);
+      this._addLabel(ex, ey + 6, e.label, '#ff8888', 8);
     }
 
     // Teleport stone marker (blue diamond)
@@ -191,20 +203,15 @@ export class MapOverlay {
       const sx = mapX + (ts.x / worldW) * mapW;
       const sy = mapY + (ts.y / worldH) * mapH;
       mapGfx.fillStyle(0x4488ff);
-      mapGfx.fillRect(sx - 2, sy - 2, 4, 4);
-      const label = scene.add.text(sx, sy + 4, ts.name, {
-        fontSize: '5px', fontFamily: 'Arial, sans-serif',
-        color: '#88aaff', stroke: '#000000', strokeThickness: 1,
-      }).setOrigin(0.5);
-      this.container.add(label);
-      this._labels.push(label);
+      mapGfx.fillRect(sx - 3, sy - 3, 6, 6);
+      this._addLabel(sx, sy + 6, ts.name, '#88aaff', 7);
     }
 
     this.titleText.setText('GREENDALE');
   }
 
   _drawForestMap(worldW, worldH) {
-    const { mapGfx, mapX, mapY, mapW, mapH, scene } = this;
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
 
     mapGfx.clear();
     // Dark green forest background
@@ -213,46 +220,31 @@ export class MapOverlay {
 
     // Path through forest (lighter green)
     mapGfx.fillStyle(0x3a8a3a);
-    const pathW = 8;
+    const pathW = 10;
     // Vertical path from south entrance to north
-    mapGfx.fillRect(mapX + mapW * 0.4, mapY + mapH * 0.05, pathW, mapH * 0.9);
+    mapGfx.fillRect(mapX + mapW * 0.38, mapY + mapH * 0.05, pathW, mapH * 0.9);
     // Horizontal path to east exit
-    mapGfx.fillRect(mapX + mapW * 0.4, mapY + mapH * 0.25, mapW * 0.55, pathW);
+    mapGfx.fillRect(mapX + mapW * 0.38, mapY + mapH * 0.22, mapW * 0.58, pathW);
 
     // Exits
     mapGfx.fillStyle(0xcc4444);
     // South — to overworld
     const sx = mapX + mapW * 0.42;
     const sy = mapY + mapH - 4;
-    mapGfx.fillTriangle(sx, sy + 3, sx - 3, sy - 2, sx + 3, sy - 2);
-    const lbl1 = scene.add.text(sx, sy - 5, 'To Town', {
-      fontSize: '5px', fontFamily: 'Arial, sans-serif',
-      color: '#ff8888', stroke: '#000000', strokeThickness: 1,
-    }).setOrigin(0.5);
-    this.container.add(lbl1);
-    this._labels.push(lbl1);
+    mapGfx.fillTriangle(sx, sy + 3, sx - 4, sy - 3, sx + 4, sy - 3);
+    this._addLabel(sx, sy - 8, 'To Town', '#ff8888', 8);
 
     // North — to boss
     const nx = mapX + mapW * 0.42;
     const ny = mapY + 4;
-    mapGfx.fillTriangle(nx, ny - 3, nx - 3, ny + 2, nx + 3, ny + 2);
-    const lbl2 = scene.add.text(nx, ny + 6, 'Boss', {
-      fontSize: '5px', fontFamily: 'Arial, sans-serif',
-      color: '#ff8888', stroke: '#000000', strokeThickness: 1,
-    }).setOrigin(0.5);
-    this.container.add(lbl2);
-    this._labels.push(lbl2);
+    mapGfx.fillTriangle(nx, ny - 3, nx - 4, ny + 3, nx + 4, ny + 3);
+    this._addLabel(nx, ny + 8, 'Boss', '#ff8888', 8);
 
     // East — to town2
     const ex = mapX + mapW - 4;
-    const ey = mapY + mapH * 0.27;
-    mapGfx.fillTriangle(ex + 3, ey, ex - 2, ey - 3, ex - 2, ey + 3);
-    const lbl3 = scene.add.text(ex - 8, ey, 'Town2', {
-      fontSize: '5px', fontFamily: 'Arial, sans-serif',
-      color: '#ff8888', stroke: '#000000', strokeThickness: 1,
-    }).setOrigin(0.5);
-    this.container.add(lbl3);
-    this._labels.push(lbl3);
+    const ey = mapY + mapH * 0.25;
+    mapGfx.fillTriangle(ex + 3, ey, ex - 3, ey - 4, ex - 3, ey + 4);
+    this._addLabel(ex - 12, ey, 'Woodhaven', '#ff8888', 7);
 
     // Tree clusters
     mapGfx.fillStyle(0x1a4d1a);
@@ -262,14 +254,14 @@ export class MapOverlay {
       [0.3, 0.6], [0.8, 0.8],
     ];
     for (const [fx, fy] of treeClusters) {
-      mapGfx.fillCircle(mapX + mapW * fx, mapY + mapH * fy, 4);
+      mapGfx.fillCircle(mapX + mapW * fx, mapY + mapH * fy, 5);
     }
 
     this.titleText.setText('WHISPERING WOODS');
   }
 
   _drawTown2Map(worldW, worldH) {
-    const { mapGfx, mapX, mapY, mapW, mapH, scene } = this;
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
 
     mapGfx.clear();
     mapGfx.fillStyle(0x4a8c3f); // green grass
@@ -277,7 +269,7 @@ export class MapOverlay {
 
     // Paths
     mapGfx.fillStyle(0xc8a86e);
-    mapGfx.fillRect(mapX, mapY + mapH * 0.45, mapW, 5); // East-west path
+    mapGfx.fillRect(mapX, mapY + mapH * 0.45, mapW, 6); // East-west path
 
     // Buildings
     const buildings = [
@@ -290,26 +282,16 @@ export class MapOverlay {
     for (const b of buildings) {
       const bx = mapX + (b.x / wW) * mapW;
       const by = mapY + (b.y / wH) * mapH;
-      mapGfx.fillRect(bx - 5, by - 4, 10, 8);
-      const label = scene.add.text(bx, by - 7, b.label, {
-        fontSize: '6px', fontFamily: 'Arial, sans-serif',
-        color: '#ddccaa', stroke: '#000000', strokeThickness: 1,
-      }).setOrigin(0.5);
-      this.container.add(label);
-      this._labels.push(label);
+      mapGfx.fillRect(bx - 6, by - 5, 12, 10);
+      this._addLabel(bx, by - 8, b.label, '#ddccaa', 8);
     }
 
     // West exit — to forest
     mapGfx.fillStyle(0xcc4444);
     const ex = mapX + 4;
     const ey = mapY + mapH * 0.47;
-    mapGfx.fillTriangle(ex - 3, ey, ex + 2, ey - 3, ex + 2, ey + 3);
-    const lbl = scene.add.text(ex + 10, ey, 'Forest', {
-      fontSize: '5px', fontFamily: 'Arial, sans-serif',
-      color: '#ff8888', stroke: '#000000', strokeThickness: 1,
-    }).setOrigin(0.5);
-    this.container.add(lbl);
-    this._labels.push(lbl);
+    mapGfx.fillTriangle(ex - 3, ey, ex + 3, ey - 4, ex + 3, ey + 4);
+    this._addLabel(ex + 14, ey, 'Forest', '#ff8888', 8);
 
     // Trees
     mapGfx.fillStyle(0x2d5a1e);
@@ -317,7 +299,7 @@ export class MapOverlay {
     for (const [tx, ty] of trees) {
       const mx = mapX + (tx / wW) * mapW;
       const my = mapY + (ty / wH) * mapH;
-      mapGfx.fillCircle(mx, my, 2);
+      mapGfx.fillCircle(mx, my, 3);
     }
 
     // Teleport stone marker
@@ -326,13 +308,8 @@ export class MapOverlay {
       const sx = mapX + (ts.x / wW) * mapW;
       const sy = mapY + (ts.y / wH) * mapH;
       mapGfx.fillStyle(0x4488ff);
-      mapGfx.fillRect(sx - 2, sy - 2, 4, 4);
-      const label = scene.add.text(sx, sy + 4, ts.name, {
-        fontSize: '5px', fontFamily: 'Arial, sans-serif',
-        color: '#88aaff', stroke: '#000000', strokeThickness: 1,
-      }).setOrigin(0.5);
-      this.container.add(label);
-      this._labels.push(label);
+      mapGfx.fillRect(sx - 3, sy - 3, 6, 6);
+      this._addLabel(sx, sy + 6, ts.name, '#88aaff', 7);
     }
 
     this.titleText.setText('WOODHAVEN');
@@ -398,10 +375,10 @@ export class MapOverlay {
         if (questManager && npc.questId) {
           const q = questManager.getQuest(npc.questId);
           if (q && (q.state === 'available' || q.state === 'ready')) {
-            const marker = this.scene.add.text(nx, ny - 5, '!', {
-              fontSize: '8px', fontFamily: 'Arial, sans-serif',
+            const marker = this.scene.add.text(nx, ny - 6, '!', {
+              fontSize: '10px', fontFamily: 'Arial, sans-serif',
               color: q.state === 'ready' ? '#44ff44' : '#ffdd00',
-              fontStyle: 'bold',
+              fontStyle: 'bold', stroke: '#000000', strokeThickness: 2,
             }).setOrigin(0.5);
             this.container.add(marker);
             this.npcDots.push(marker);
@@ -427,11 +404,11 @@ export class MapOverlay {
 
     this._teleportMenuActive = true;
     const w = this.scene.cameras.main.width;
-    const startY = this.mapY + this.mapH + 8;
+    const startY = this.mapY + this.mapH + 10;
 
     const title = this.scene.add.text(w / 2, startY, 'Teleport to:', {
-      fontSize: '8px', fontFamily: 'Arial, sans-serif',
-      color: '#88aaff', stroke: '#000000', strokeThickness: 1,
+      fontSize: '10px', fontFamily: 'Arial, sans-serif',
+      color: '#88aaff', stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.container.add(title);
     this._teleportButtons.push(title);
@@ -439,9 +416,9 @@ export class MapOverlay {
     destinations.forEach((mapName, i) => {
       const map = MAPS[mapName];
       const name = map?.teleportStone?.name || mapName;
-      const label = this.scene.add.text(w / 2, startY + 12 + i * 10, `${i + 1}. ${name}`, {
-        fontSize: '8px', fontFamily: 'Arial, sans-serif',
-        color: '#ffffff', stroke: '#000000', strokeThickness: 1,
+      const label = this.scene.add.text(w / 2, startY + 14 + i * 12, `${i + 1}. ${name}`, {
+        fontSize: '10px', fontFamily: 'Arial, sans-serif',
+        color: '#ffffff', stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
       this.container.add(label);
       this._teleportButtons.push(label);
