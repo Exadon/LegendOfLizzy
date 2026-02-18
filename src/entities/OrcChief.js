@@ -69,6 +69,9 @@ export class OrcChief extends Phaser.Physics.Arcade.Sprite {
       this.setTint(0xff4444);
       this.scene.cameras.main.shake(300, 0.01);
       this.scene.showNotification('Orc Chief enrages!');
+
+      // Intensify boss music
+      if (this.scene.music) this.scene.music.crossfade('boss_intense', this.scene.sfx, 0.5);
       // Summon goblin adds
       if (!this._summonedAdds) {
         this._summonedAdds = true;

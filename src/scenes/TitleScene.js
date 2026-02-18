@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SFX } from '../systems/SFX.js';
+import { Music } from '../systems/Music.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { MAPS } from '../data/Maps.js';
 
@@ -21,6 +22,21 @@ export class TitleScene extends Phaser.Scene {
     if (localStorage.getItem('lizzy-muted') === 'true') {
       sfx.muted = true;
     }
+
+    // Title screen music — gentle interior track
+    if (!this.registry.get('music')) {
+      this.registry.set('music', new Music());
+    }
+    this.music = this.registry.get('music');
+    // Start music on first user interaction (audio context requirement)
+    this.input.keyboard.once('keydown', () => {
+      if (!this.music.playing) {
+        this.music.play('interior', sfx);
+        if (sfx.muted && this.music.masterGain && this.music.ctx) {
+          this.music.masterGain.gain.setValueAtTime(0, this.music.ctx.currentTime);
+        }
+      }
+    });
 
     this.cameras.main.setBackgroundColor('#0a0a1a');
 
@@ -70,7 +86,7 @@ export class TitleScene extends Phaser.Scene {
     lizzy.setScale(1.5);
     this.tweens.add({
       targets: lizzy,
-      scaleX: 1.55, scaleY: 1.45,
+      scaleX: 1.52, scaleY: 1.48,
       duration: 1200,
       yoyo: true,
       repeat: -1,
@@ -142,6 +158,7 @@ export class TitleScene extends Phaser.Scene {
     // Start game - continue from save
     this.input.keyboard.once('keydown-ENTER', () => {
       sfx.play('select');
+      if (this.music) this.music.fadeOut(0.4);
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         if (hasSave) {
@@ -167,6 +184,8 @@ export class TitleScene extends Phaser.Scene {
               timedQuestId: save.timedQuestId || null,
               timedRemaining: save.timedRemaining || 0,
               tutorialShown: save.tutorialShown || false,
+              playerAttackBonus: save.playerAttackBonus || 0,
+              unlockedTeleports: save.unlockedTeleports || [],
             });
             return;
           }
@@ -180,6 +199,7 @@ export class TitleScene extends Phaser.Scene {
       this.input.keyboard.once('keydown-N', () => {
         SaveManager.deleteSave();
         sfx.play('select');
+        if (this.music) this.music.fadeOut(0.4);
         this.cameras.main.fadeOut(400, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
           this.scene.start('Game');

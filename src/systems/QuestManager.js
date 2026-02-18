@@ -295,6 +295,35 @@ export const QUESTS = {
     },
   },
 
+  scout_forest: {
+    id: 'scout_forest',
+    name: 'Forest Patrol',
+    giver: 'ranger_reed',
+    dialogue: {
+      available: [
+        'The forest is crawling with\ngoblins lately...',
+        'Kill 3 goblins so I can\nassess the threat!',
+      ],
+      active: [
+        'Keep hunting those goblins!\nI need to know how many there are.',
+      ],
+      ready: [
+        'Three goblins down!\nGood work, ranger-in-training!',
+        'But I fear something worse\nlurks deeper inside...',
+      ],
+      completed: [
+        'Thanks for the scouting\nreport on the goblins!',
+      ],
+    },
+    reward: { gold: 40, xp: 60 },
+    objective: {
+      type: 'kill',
+      target: 'goblin',
+      count: 3,
+      description: 'Defeat 3 Goblins',
+    },
+  },
+
   clear_forest: {
     id: 'clear_forest',
     name: 'The Forest Menace',
@@ -412,7 +441,7 @@ export const QUESTS = {
     objective: {
       type: 'fetch',
       target: 'golden_axe',
-      fetchMap: 'forest_dungeon',
+      fetchMap: 'forest',
       fetchX: 240,
       fetchY: 100,
       count: 1,

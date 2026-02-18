@@ -20,6 +20,8 @@ export class SaveManager {
       timedQuestId: gameScene._timedQuestId || null,
       timedRemaining: gameScene._timedRemaining || 0,
       tutorialShown: gameScene.tutorialShown || false,
+      playerAttackBonus: gameScene.playerAttackBonus || 0,
+      unlockedTeleports: gameScene.unlockedTeleports || [],
       timestamp: Date.now(),
     };
     try {

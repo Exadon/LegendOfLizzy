@@ -89,6 +89,9 @@ export class FishingMinigame {
 
     // Space key listener
     this._spaceKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+    // Fish cast SFX
+    scene.sfx.play('fishCast');
   }
 
   update(delta) {
@@ -117,7 +120,7 @@ export class FishingMinigame {
 
   _catchSuccess() {
     const scene = this.scene;
-    scene.sfx.play('pickup');
+    scene.sfx.play('fishCatch');
     scene.showNotification(`Caught a ${this.fish.name}! +${this.fish.gold}g +${this.fish.xp}XP`);
     scene.addGold(this.fish.gold);
     scene.addXP(this.fish.xp);

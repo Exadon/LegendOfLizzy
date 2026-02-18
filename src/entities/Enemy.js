@@ -176,7 +176,15 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // Slimes just wander randomly
+    // Chase player when close (60px range)
+    const distToPlayer = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+    if (distToPlayer < 60) {
+      const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
+      this.setVelocity(Math.cos(angle) * this.speed, Math.sin(angle) * this.speed);
+      return;
+    }
+
+    // Wander randomly when player is far
     this.wanderTimer -= delta;
     if (this.wanderTimer <= 0) {
       if (Math.random() < 0.4) {

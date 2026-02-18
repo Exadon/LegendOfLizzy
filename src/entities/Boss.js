@@ -54,6 +54,9 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
       scene.showNotification('Skeleton King enrages!');
       scene.cameras.main.shake(300, 0.015);
 
+      // Intensify boss music
+      if (scene.music) scene.music.crossfade('boss_intense', scene.sfx, 0.5);
+
       // 1s invulnerability during transition
       this._phaseInvuln = true;
       this._addTimer(scene.time.delayedCall(1000, () => { this._phaseInvuln = false; }));

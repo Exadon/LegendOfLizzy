@@ -77,6 +77,31 @@ const TRACKS = {
     bassVol: 0.06,
     melodyVol: 0.035,
   },
+  boss_intense: {
+    bpm: 180,
+    // Am/Dm aggressive: faster, louder version of boss
+    chords: [
+      [220, 262, 330],  // Am
+      [147, 175, 220],  // Dm
+      [220, 262, 330],  // Am
+      [165, 196, 247],  // Em
+    ],
+    bass: [110, 73, 110, 82],
+    melody: [
+      660, 784, 880, 784, 660, 587, 523, 587,
+      660, 784, 880, 1047, 880, 784, 660, 587,
+      523, 587, 660, 784, 880, 784, 660, 523,
+      587, 660, 523, 440, 523, 587, 660, 784,
+    ],
+    arpSpeed: 4,
+    melodySpeed: 3,
+    wave: 'square',
+    bassWave: 'square',
+    melodyWave: 'sawtooth',
+    volume: 0.05,
+    bassVol: 0.07,
+    melodyVol: 0.04,
+  },
   cave: {
     bpm: 70,
     // Sparse, deep drones with occasional high pings
@@ -241,6 +266,27 @@ export class Music {
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
     this.masterGain.gain.linearRampToValueAtTime(0.001, now + duration);
     setTimeout(() => this.stop(), duration * 1000 + 100);
+  }
+
+  crossfade(trackName, sfx, duration = 0.8) {
+    this.ensureContext(sfx);
+    if (!this.ctx) return;
+
+    // If already playing this track, do nothing
+    if (this.playing && this.currentTrackName === trackName) return;
+
+    if (this.playing) {
+      // Fade out current, then start new
+      const now = this.ctx.currentTime;
+      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+      this.masterGain.gain.linearRampToValueAtTime(0.001, now + duration);
+      setTimeout(() => {
+        this.stop();
+        this.play(trackName, sfx);
+      }, duration * 1000 + 50);
+    } else {
+      this.play(trackName, sfx);
+    }
   }
 
   _schedule() {

@@ -50,5 +50,6 @@ const origTextFactory = Phaser.GameObjects.GameObjectFactory.prototype.text;
 Phaser.GameObjects.GameObjectFactory.prototype.text = function (x, y, text, style) {
   const t = origTextFactory.call(this, x, y, text, style);
   t.setResolution(8);
+  if (!style || !style.fontStyle) t.setFontStyle('bold');
   return t;
 };

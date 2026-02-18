@@ -1,7 +1,7 @@
 export const OVERWORLD_MAP = {
   name: 'overworld',
-  width: 50,
-  height: 38,
+  width: 65,
+  height: 48,
   tileSize: 16,
   layers: { ground: null, collision: null },
   objects: [
@@ -17,9 +17,21 @@ export const OVERWORLD_MAP = {
     { type: 'oak-tree', x: 350, y: 200 },
     { type: 'oak-tree', x: 550, y: 500 },
     { type: 'oak-tree', x: 250, y: 450 },
+    // New trees in expanded area
+    { type: 'oak-tree', x: 850, y: 120 },
+    { type: 'oak-tree', x: 920, y: 300 },
+    { type: 'oak-tree', x: 800, y: 450 },
+    { type: 'oak-tree', x: 950, y: 500 },
+    { type: 'oak-tree', x: 300, y: 650 },
+    { type: 'oak-tree', x: 550, y: 680 },
+    { type: 'oak-tree', x: 750, y: 620 },
+    { type: 'oak-tree', x: 180, y: 700 },
+    { type: 'oak-tree', x: 900, y: 650 },
+    // Houses
     { type: 'house-wood', x: 500, y: 80 },
     { type: 'house-wood', x: 300, y: 480 },
     { type: 'house-wood', x: 720, y: 260 },
+    { type: 'house-wood', x: 850, y: 200 },
   ],
   doors: [
     { x: 486, y: 68, width: 32, height: 16, targetMap: 'house_interior', targetX: 88, targetY: 128 },
@@ -27,14 +39,20 @@ export const OVERWORLD_MAP = {
     { x: 706, y: 248, width: 32, height: 16, targetMap: 'inn_interior', targetX: 88, targetY: 128 },
     { x: 48, y: 80, width: 24, height: 14, targetMap: 'cave', targetX: 160, targetY: 230 },
     { x: 680, y: 160, width: 24, height: 14, targetMap: 'desert_temple', targetX: 160, targetY: 200 },
-    { x: 80, y: 420, width: 24, height: 14, targetMap: 'forest_dungeon', targetX: 160, targetY: 290 },
+    // Forest entrance — now leads to outdoor forest map
+    { x: 80, y: 420, width: 24, height: 14, targetMap: 'forest', targetX: 320, targetY: 530 },
+    // Second house door
+    { x: 836, y: 188, width: 32, height: 16, targetMap: 'house_interior', targetX: 88, targetY: 128 },
   ],
   playerSpawn: { x: 200, y: 128 },
+  teleportStone: { x: 400, y: 350, name: 'Greendale' },
   biomes: [
-    // Desert zone (east)
+    // Desert zone (east-north)
     { type: 'desert', x1: 38, y1: 0, x2: 50, y2: 20 },
-    // Forest zone (west)
-    { type: 'forest', x1: 0, y1: 15, x2: 8, y2: 38 },
+    // Forest zone (southwest)
+    { type: 'forest', x1: 0, y1: 15, x2: 8, y2: 48 },
+    // Extended forest zone (south)
+    { type: 'forest', x1: 0, y1: 38, x2: 25, y2: 48 },
   ],
 };
 
@@ -302,52 +320,77 @@ export const PHARAOH_CHAMBER_MAP = {
   playerSpawn: { x: 128, y: 200 },
 };
 
-export const FOREST_DUNGEON_MAP = {
-  name: 'forest_dungeon',
-  width: 20,
-  height: 20,
+// Outdoor forest zone — replaces old forest_dungeon
+export const FOREST_MAP = {
+  name: 'forest',
+  width: 40,
+  height: 35,
   tileSize: 16,
-  floorTile: 'cave-floor',
-  isDark: true,
+  floorTile: 'forest-floor',
   layers: {
     ground: null,
     collision: [
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1],
-      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
-      [1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,1],
-      [1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1],
+      [1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+      [1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,1,1],
+      [1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+      [1,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+      [1,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1],
+      [1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,1,1],
+      [1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1],
+      [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1],
+      [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     ],
   },
   enemies: [
-    { type: 'goblin', x: 80, y: 60 },
-    { type: 'goblin', x: 200, y: 100 },
-    { type: 'goblin', x: 120, y: 200 },
-    { type: 'goblin', x: 250, y: 180 },
-    { type: 'orc', x: 160, y: 140 },
-    { type: 'orc', x: 60, y: 240 },
-    { type: 'orc', x: 260, y: 60 },
+    { type: 'goblin', x: 120, y: 80 },
+    { type: 'goblin', x: 280, y: 140 },
+    { type: 'goblin', x: 100, y: 280 },
+    { type: 'goblin', x: 350, y: 200 },
+    { type: 'orc', x: 200, y: 180 },
+    { type: 'orc', x: 80, y: 380 },
+    { type: 'orc', x: 320, y: 320 },
+    { type: 'slime', x: 180, y: 400 },
+    { type: 'slime', x: 400, y: 120 },
+  ],
+  chests: [
+    { id: 'forest_chest_1', x: 100, y: 160, contents: { gold: 25 } },
+    { id: 'forest_chest_2', x: 420, y: 280, contents: { gold: 30 } },
   ],
   doors: [
-    { x: 144, y: 308, width: 32, height: 10, targetMap: 'overworld', targetX: 100, targetY: 430 },
+    // South entrance — back to overworld
+    { x: 256, y: 540, width: 128, height: 10, targetMap: 'overworld', targetX: 100, targetY: 430 },
+    // North entrance — to boss room
     { x: 144, y: 20, width: 32, height: 10, targetMap: 'forest_boss', targetX: 96, targetY: 180 },
+    // East exit — to town2 (Woodhaven)
+    { x: 624, y: 128, width: 10, height: 32, targetMap: 'town2', targetX: 30, targetY: 220 },
   ],
-  playerSpawn: { x: 160, y: 290 },
+  playerSpawn: { x: 320, y: 530 },
 };
 
 export const FOREST_BOSS_MAP = {
@@ -355,8 +398,7 @@ export const FOREST_BOSS_MAP = {
   width: 14,
   height: 14,
   tileSize: 16,
-  floorTile: 'cave-floor',
-  isDark: true,
+  floorTile: 'forest-floor',
   layers: {
     ground: null,
     collision: [
@@ -379,9 +421,114 @@ export const FOREST_BOSS_MAP = {
   hasBoss: true,
   bossType: 'orc_chief',
   doors: [
-    { x: 96, y: 216, width: 32, height: 10, targetMap: 'forest_dungeon', targetX: 160, targetY: 40 },
+    { x: 96, y: 216, width: 32, height: 10, targetMap: 'forest', targetX: 160, targetY: 40 },
   ],
   playerSpawn: { x: 96, y: 180 },
+};
+
+// ---- Second Town: Woodhaven ----
+
+export const TOWN2_MAP = {
+  name: 'town2',
+  width: 35,
+  height: 28,
+  tileSize: 16,
+  layers: { ground: null, collision: null },
+  objects: [
+    { type: 'oak-tree', x: 60, y: 40 },
+    { type: 'oak-tree', x: 480, y: 60 },
+    { type: 'oak-tree', x: 500, y: 360 },
+    { type: 'oak-tree', x: 60, y: 380 },
+    { type: 'oak-tree', x: 250, y: 50 },
+    { type: 'oak-tree', x: 450, y: 300 },
+    { type: 'house-wood', x: 280, y: 100 },
+    { type: 'house-wood', x: 420, y: 180 },
+  ],
+  doors: [
+    // West exit — back to forest
+    { x: 0, y: 208, width: 10, height: 32, targetMap: 'forest', targetX: 600, targetY: 128 },
+    // Shop door
+    { x: 266, y: 88, width: 32, height: 16, targetMap: 'town2_shop', targetX: 88, targetY: 128 },
+    // Inn door
+    { x: 406, y: 168, width: 32, height: 16, targetMap: 'town2_inn', targetX: 88, targetY: 128 },
+  ],
+  playerSpawn: { x: 30, y: 220 },
+  teleportStone: { x: 280, y: 260, name: 'Woodhaven' },
+};
+
+export const TOWN2_SHOP_MAP = {
+  name: 'town2_shop',
+  width: 12,
+  height: 10,
+  tileSize: 16,
+  floorTile: 'wood-floor',
+  layers: {
+    ground: null,
+    collision: [
+      [1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,0,0,0,0,0,0,1,1,1],
+    ],
+  },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 },
+    { type: 'shelf', x: 32, y: 32 },
+    { type: 'shelf', x: 160, y: 32 },
+    { type: 'barrel', x: 32, y: 80 },
+    { type: 'barrel', x: 160, y: 80 },
+  ],
+  interiorNPCs: [
+    { id: 'town2_shopkeeper', name: 'Shopkeeper', texture: 'miner-mike', x: 96, y: 36, role: 'shop' },
+  ],
+  doors: [
+    { x: 48, y: 136, width: 96, height: 20, targetMap: 'town2', targetX: 280, targetY: 118 },
+  ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+export const TOWN2_INN_MAP = {
+  name: 'town2_inn',
+  width: 12,
+  height: 10,
+  tileSize: 16,
+  floorTile: 'wood-floor',
+  layers: {
+    ground: null,
+    collision: [
+      [1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,0,0,0,0,0,0,1,1,1],
+    ],
+  },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 },
+    { type: 'bed', x: 40, y: 40 },
+    { type: 'bed', x: 160, y: 40 },
+    { type: 'table', x: 48, y: 96 },
+    { type: 'table', x: 144, y: 96 },
+    { type: 'barrel', x: 160, y: 112 },
+  ],
+  interiorNPCs: [
+    { id: 'town2_innkeeper', name: 'Innkeeper', texture: 'chef-chloe', x: 96, y: 36, role: 'inn' },
+  ],
+  doors: [
+    { x: 48, y: 136, width: 96, height: 20, targetMap: 'town2', targetX: 420, targetY: 198 },
+  ],
+  playerSpawn: { x: 88, y: 120 },
 };
 
 export const MAPS = {
@@ -393,6 +540,9 @@ export const MAPS = {
   boss_room: BOSS_ROOM_MAP,
   desert_temple: DESERT_TEMPLE_MAP,
   pharaoh_chamber: PHARAOH_CHAMBER_MAP,
-  forest_dungeon: FOREST_DUNGEON_MAP,
+  forest: FOREST_MAP,
   forest_boss: FOREST_BOSS_MAP,
+  town2: TOWN2_MAP,
+  town2_shop: TOWN2_SHOP_MAP,
+  town2_inn: TOWN2_INN_MAP,
 };

@@ -24,6 +24,17 @@ import { EquipmentManager, EQUIPMENT } from '../systems/Equipment.js';
 import { Chest } from '../entities/Chest.js';
 import { Pet } from '../entities/Pet.js';
 
+// Unified enemy reward table — used by both sword kills and magic kills
+const ENEMY_REWARDS = {
+  skeleton: { gold: 5, xp: 15 },
+  slime: { gold: 2, xp: 8 },
+  bat: { gold: 3, xp: 10 },
+  ghost: { gold: 8, xp: 25 },
+  scorpion: { gold: 6, xp: 18 },
+  goblin: { gold: 4, xp: 12 },
+  orc: { gold: 7, xp: 20 },
+};
+
 export class GameScene extends Phaser.Scene {
   constructor() {
     super('Game');
@@ -48,6 +59,8 @@ export class GameScene extends Phaser.Scene {
     this.savedTutorialShown = data.tutorialShown || false;
     this.savedEscortActive = data.escortActive || false;
     this.savedEscortNpcId = data.escortNpcId || null;
+    this.savedPlayerAttackBonus = data.playerAttackBonus || 0;
+    this.savedUnlockedTeleports = data.unlockedTeleports || [];
     // Prevent instant door re-trigger when spawning near an exit
     this._doorCooldown = !!data.mapData;
   }
@@ -59,6 +72,8 @@ export class GameScene extends Phaser.Scene {
     this.isOverworld = map.name === 'overworld';
     this.isCave = map.isDark || false;
     this.isTemple = map.floorTile === 'sand-floor';
+    this.isForest = map.name === 'forest' || map.name === 'forest_boss';
+    this.isTown2 = map.name === 'town2';
 
     // SFX
     this.sfx = this.registry.get('sfx') || new SFX();
@@ -102,13 +117,18 @@ export class GameScene extends Phaser.Scene {
       this.spawnInteriorNPCs(map.interiorNPCs);
     }
 
+    // Town2 NPCs
+    if (this.isTown2) {
+      this.spawnTown2NPCs();
+    }
+
     // Enemies
     this.enemies = this.add.group();
     if (this.isOverworld) {
       this.spawnEnemies();
     }
 
-    // Cave enemies from map data
+    // Cave/dungeon/forest enemies from map data
     if (map.enemies) {
       this.spawnMapEnemies(map.enemies);
     }
@@ -158,6 +178,7 @@ export class GameScene extends Phaser.Scene {
 
     // Map and quest book keys
     this.mapKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.petBarkKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
     this.questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
     // Menu key
@@ -338,6 +359,7 @@ export class GameScene extends Phaser.Scene {
     this.xp = this.savedXP || 0;
     this.level = this.savedLevel || 1;
     this.xpToNext = this.level * 100;
+    this.playerAttackBonus = this.savedPlayerAttackBonus || 0;
 
     // Inventory
     this.inventory = new Inventory();
@@ -362,8 +384,12 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Teleport system
+    this.unlockedTeleports = this.savedUnlockedTeleports || [];
+    this._spawnTeleportStone();
+
     // Map overlay and game menu (unified pause + quests)
-    this.mapOverlay = new MapOverlay(this);
+    this.mapOverlay = new MapOverlay(this, this.unlockedTeleports);
     this.gameMenu = new GameMenu(this);
     this.overlayOpen = false;
 
@@ -426,12 +452,13 @@ export class GameScene extends Phaser.Scene {
       boss_room: 'boss',
       desert_temple: 'desert',
       pharaoh_chamber: 'boss',
-      forest_dungeon: 'cave',
+      forest: 'cave',
       forest_boss: 'boss',
+      town2: 'interior',
     };
     const trackName = trackMap[mapName] || (mapName.includes('interior') ? 'interior' : 'interior');
     this.time.delayedCall(500, () => {
-      this.music.play(trackName, this.sfx);
+      this.music.crossfade(trackName, this.sfx);
     });
 
     // Cave darkness fog-of-war
@@ -539,12 +566,10 @@ export class GameScene extends Phaser.Scene {
     this.dialogueIndex = 0;
     this.dialogueCallback = callback;
     this.dialogueSpeaker.setText(speakerName || '');
-    this.dialogueText.setText(lines[0]);
     this.dialogueContainer.setVisible(true);
     this.player.setVelocity(0, 0);
     this.physics.pause();
     if (this.boss && this.boss.pauseTimers) this.boss.pauseTimers();
-    this.sfx.play('dialogue');
 
     // Show portrait if available
     const texKey = portraitKey ? `portrait-${portraitKey}` : null;
@@ -556,19 +581,77 @@ export class GameScene extends Phaser.Scene {
       this.dialoguePortrait.setVisible(false);
       this.dialoguePortraitBg.setVisible(false);
     }
+
+    // Start typewriter effect for first line
+    this._startTypewriter(lines[0]);
+  }
+
+  _startTypewriter(fullText) {
+    this._typewriterFull = fullText;
+    this._typewriterIndex = 0;
+    this._typewriterDone = false;
+    this.dialogueText.setText('');
+
+    // Clear previous timer if any
+    if (this._typewriterTimer) {
+      this._typewriterTimer.remove();
+      this._typewriterTimer = null;
+    }
+
+    let charCount = 0;
+    this._typewriterTimer = this.time.addEvent({
+      delay: 25,
+      callback: () => {
+        if (this._typewriterDone) return;
+        this._typewriterIndex++;
+        this.dialogueText.setText(fullText.substring(0, this._typewriterIndex));
+        charCount++;
+        // Blip SFX every 3rd character
+        if (charCount % 3 === 0) this.sfx.play('dialogue');
+        if (this._typewriterIndex >= fullText.length) {
+          this._typewriterDone = true;
+          if (this._typewriterTimer) {
+            this._typewriterTimer.remove();
+            this._typewriterTimer = null;
+          }
+        }
+      },
+      loop: true,
+    });
+  }
+
+  _skipTypewriter() {
+    if (this._typewriterTimer) {
+      this._typewriterTimer.remove();
+      this._typewriterTimer = null;
+    }
+    this._typewriterDone = true;
+    this.dialogueText.setText(this._typewriterFull);
   }
 
   advanceDialogue() {
+    // If typewriter is still running, skip to full text first
+    if (!this._typewriterDone) {
+      this._skipTypewriter();
+      return;
+    }
+
     this.dialogueIndex++;
     if (this.dialogueIndex < this.dialogueLines.length) {
-      this.dialogueText.setText(this.dialogueLines[this.dialogueIndex]);
-      this.sfx.play('dialogue');
+      this._startTypewriter(this.dialogueLines[this.dialogueIndex]);
     } else {
       this.closeDialogue();
     }
   }
 
   closeDialogue() {
+    // Clean up typewriter
+    if (this._typewriterTimer) {
+      this._typewriterTimer.remove();
+      this._typewriterTimer = null;
+    }
+    this._typewriterDone = true;
+
     this.dialogueContainer.setVisible(false);
     this.inDialogue = false;
     // Resume physics unless ESC menu is open
@@ -617,6 +700,37 @@ export class GameScene extends Phaser.Scene {
           for (let col = 0; col < map.width; col++) {
             if (map.layers.collision[row]?.[col] === 1) {
               this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x8b7355).setDepth(0);
+            }
+          }
+        }
+      }
+    } else if (map.floorTile === 'forest-floor') {
+      // Outdoor forest — grass base with dark green tint
+      const grassTex = this.textures.get('grass-middle');
+      const gw = grassTex.getSourceImage().width;
+      const gh = grassTex.getSourceImage().height;
+      for (let x = 0; x < this.worldWidth; x += gw) {
+        for (let y = 0; y < this.worldHeight; y += gh) {
+          this.add.image(x, y, 'grass-middle').setOrigin(0, 0);
+        }
+      }
+      // Dark green tint overlay for forest feel
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          if (!map.layers.collision || map.layers.collision[row]?.[col] !== 1) {
+            this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x225522, 0.3).setDepth(0);
+          }
+        }
+      }
+      // Dense tree walls for collision tiles
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              // Tree trunk
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2 + 2, 4, ts - 4, 0x553311).setDepth(0);
+              // Tree canopy (dark green)
+              this.add.circle(col * ts + ts / 2, row * ts + ts / 2 - 2, ts / 2, 0x1a4d1a).setDepth(1);
             }
           }
         }
@@ -694,8 +808,8 @@ export class GameScene extends Phaser.Scene {
       this.obstacles.add(zone);
     }
 
-    // Environmental decorations (overworld only)
-    if (this.isOverworld) {
+    // Environmental decorations
+    if (this.isOverworld || this.isForest || this.isTown2) {
       this.decorateWorld(map);
     }
 
@@ -732,6 +846,10 @@ export class GameScene extends Phaser.Scene {
         // Collision
         const zone = this.add.zone(item.x, item.y, 24, 36);
         this.obstacles.add(zone);
+        // Mark as interactable bed if in house_interior
+        if (map.name === 'house_interior') {
+          zone.isBed = true;
+        }
       } else if (item.type === 'counter') {
         // Shop/inn counter
         const counter = this.add.rectangle(item.x, item.y, 64, 14, 0x774422);
@@ -891,11 +1009,11 @@ export class GameScene extends Phaser.Scene {
     });
     this.npcs.add(mike);
 
-    // Ranger Reed - forest dungeon quest, near southwest forest
+    // Ranger Reed - forest dungeon quest chain: scout_forest → clear_forest
     const reed = new NPC(this, 120, 400, 'lumberjack-jack', {
       id: 'ranger_reed',
       name: 'Ranger Reed',
-      questId: 'clear_forest',
+      questId: 'scout_forest',
       idleAnim: 'npc-jack-idle-down',
       wanders: true,
       speed: 10,
@@ -944,6 +1062,10 @@ export class GameScene extends Phaser.Scene {
       { x: 350, y: 500 },
       { x: 100, y: 250 },
       { x: 700, y: 450 },
+      // New enemies in expanded area
+      { x: 850, y: 350 },
+      { x: 900, y: 500 },
+      { x: 500, y: 650 },
     ];
     for (const pos of skeletonPositions) {
       this.enemySpawns.push({ ...pos, type: 'skeleton' });
@@ -955,6 +1077,7 @@ export class GameScene extends Phaser.Scene {
       { x: 450, y: 400 },
       { x: 150, y: 200 },
       { x: 650, y: 450 },
+      { x: 750, y: 600 },
     ];
     for (const pos of slimePositions) {
       this.enemySpawns.push({ ...pos, type: 'slime' });
@@ -1136,6 +1259,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnChests() {
+    const isForest = this.mapData.name === 'forest';
     const positions = this.isOverworld
       ? [
           { x: 440, y: 480 }, { x: 720, y: 140 }, { x: 100, y: 420 },
@@ -1145,6 +1269,8 @@ export class GameScene extends Phaser.Scene {
       ? [{ x: 240, y: 100 }, { x: 60, y: 180 }]
       : this.isTemple
       ? [{ x: 60, y: 60 }, { x: 260, y: 60 }]
+      : isForest
+      ? [{ x: 100, y: 160 }, { x: 420, y: 280 }]
       : [];
 
     // Check saved opened chests
@@ -1175,7 +1301,7 @@ export class GameScene extends Phaser.Scene {
     const loot = nearest.open(this);
     if (!loot) return false;
 
-    this.sfx.play('pickup');
+    this.sfx.play('chestOpen');
     this.cameras.main.shake(50, 0.004);
 
     if (loot.type === 'gold') {
@@ -1221,7 +1347,8 @@ export class GameScene extends Phaser.Scene {
 
     const baseDmg = this.player.attackPower || 1;
     const equipBonus = this.equipment ? this.equipment.getAttackBonus() : 0;
-    const dmg = baseDmg + equipBonus + (this._fairyAttackBuff ? 1 : 0);
+    const levelBonus = this.playerAttackBonus || 0;
+    const dmg = baseDmg + equipBonus + levelBonus + (this._fairyAttackBuff ? 1 : 0);
     enemy.takeDamage(dmg, this.player.x, this.player.y);
 
     // Combat juice - stronger feedback for charged/combo hits
@@ -1247,8 +1374,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Gold + XP reward
-      const rewards = { skeleton: { gold: 5, xp: 15 }, slime: { gold: 2, xp: 8 }, bat: { gold: 3, xp: 10 }, ghost: { gold: 8, xp: 25 }, scorpion: { gold: 6, xp: 18 }, goblin: { gold: 4, xp: 12 }, orc: { gold: 7, xp: 20 } };
-      const reward = rewards[enemy.enemyType] || { gold: 3, xp: 10 };
+      const reward = ENEMY_REWARDS[enemy.enemyType] || { gold: 3, xp: 10 };
       this.addGold(reward.gold);
       this.addXP(reward.xp);
 
@@ -1282,7 +1408,7 @@ export class GameScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.sfx.play('doorEnter');
 
-    // Fade out music before transition
+    // Crossfade music on map transition (fade out, new track plays on restart)
     if (this.music) this.music.fadeOut(0.3);
 
     const targetMap = MAPS[door.targetMap];
@@ -1325,6 +1451,8 @@ export class GameScene extends Phaser.Scene {
         tutorialShown: this.tutorialShown,
         escortActive: this._escortActive,
         escortNpcId: this._escortNPC ? this._escortNPC.npcId : null,
+        playerAttackBonus: this.playerAttackBonus,
+        unlockedTeleports: this.unlockedTeleports,
       });
     });
   }
@@ -1564,6 +1692,34 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Ranger Reed: chain scout_forest → clear_forest
+    if (nearestNPC.npcId === 'ranger_reed') {
+      const scoutQuest = this.questManager.getQuest('scout_forest');
+      const forestQuest = this.questManager.getQuest('clear_forest');
+      if (scoutQuest && scoutQuest.state === 'completed' && forestQuest && forestQuest.state === 'available') {
+        this.showDialogue(forestQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('clear_forest');
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + forestQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (forestQuest && (forestQuest.state === 'active' || forestQuest.state === 'ready')) {
+        const fLines = forestQuest.dialogue[forestQuest.state];
+        this.showDialogue(fLines, () => {
+          if (forestQuest.state === 'ready') {
+            this.giveQuestReward('clear_forest');
+            this.questManager.completeQuest('clear_forest');
+            this.updateQuestTracker();
+            this.showNotification('Quest Complete!');
+            this.sfx.play('questComplete');
+          }
+        }, name, portrait);
+        return;
+      }
+    }
+
     // Add time-aware greeting and dialogue variety for non-quest dialogue
     let finalLines = lines;
     if (!quest || quest.state === 'completed') {
@@ -1685,7 +1841,7 @@ export class GameScene extends Phaser.Scene {
 
   _spawnFetchItems() {
     const axeQuest = this.questManager.getQuest('lost_axe');
-    if (axeQuest && axeQuest.state === 'active' && this.mapData.name === 'forest_dungeon') {
+    if (axeQuest && axeQuest.state === 'active' && this.mapData.name === 'forest') {
       const obj = axeQuest.objective;
       const item = this.add.rectangle(obj.fetchX, obj.fetchY, 8, 8, 0xffaa00);
       item.setDepth(9000);
@@ -1835,6 +1991,16 @@ export class GameScene extends Phaser.Scene {
       if (this.level % 3 === 0) {
         this.player.speed = Math.round(this.player.speed * 1.05);
         bonusMsg += ' +SPD';
+      }
+      if (this.level % 4 === 0) {
+        this.playerAttackBonus = (this.playerAttackBonus || 0) + 1;
+        bonusMsg += ' +ATK';
+      }
+      if (this.level % 5 === 0) {
+        this.player.maxMana += 2;
+        this.player.mana = Math.min(this.player.mana + 2, this.player.maxMana);
+        this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+        bonusMsg += ' +MANA';
       }
 
       this.showNotification(`Level Up! Lv.${this.level}${bonusMsg}`);
@@ -1999,9 +2165,9 @@ export class GameScene extends Phaser.Scene {
   openShopMenu(npc) {
     // Build shop inventory: potions + next equipment tier
     const shopItems = [
-      { id: 'health_potion', name: 'Health Potion', price: 15, color: '#e74c3c', type: 'potion' },
-      { id: 'speed_potion', name: 'Speed Potion', price: 30, color: '#3498db', type: 'potion' },
-      { id: 'shield_potion', name: 'Shield Potion', price: 50, color: '#f1c40f', type: 'potion' },
+      { id: 'health_potion', name: 'Health Potion', price: 15, color: '#e74c3c', type: 'potion', desc: 'Restores 2 HP' },
+      { id: 'speed_potion', name: 'Speed Potion', price: 30, color: '#3498db', type: 'potion', desc: '1.5x speed, 8s' },
+      { id: 'shield_potion', name: 'Shield Potion', price: 50, color: '#f1c40f', type: 'potion', desc: 'Invincible, 5s' },
     ];
 
     // Show equipment upgrades the player doesn't own yet
@@ -2328,8 +2494,7 @@ export class GameScene extends Phaser.Scene {
           const updated = this.questManager.trackEvent('kill', { target: enemy.enemyType });
           if (updated) this.updateQuestTracker();
         }
-        const rewards = { skeleton: { gold: 5, xp: 15 }, slime: { gold: 2, xp: 8 }, bat: { gold: 3, xp: 10 }, ghost: { gold: 8, xp: 25 }, scorpion: { gold: 6, xp: 18 } };
-        const reward = rewards[enemy.enemyType] || { gold: 3, xp: 10 };
+        const reward = ENEMY_REWARDS[enemy.enemyType] || { gold: 3, xp: 10 };
         this.addGold(reward.gold);
         this.addXP(reward.xp);
         // Track bestiary
@@ -2403,7 +2568,7 @@ export class GameScene extends Phaser.Scene {
 
       // Wizard hat (purple triangle + brim) — sits on Paul's head
       const hatX = px + 20;
-      const hatY = py - 14;
+      const hatY = py - 10;
       this._paulHat = this.add.graphics();
       this._paulHat.setDepth(10002);
       // Hat brim (drawn first, behind cone)
@@ -2492,6 +2657,8 @@ export class GameScene extends Phaser.Scene {
               timedRemaining: this._timedRemaining,
               tutorialShown: this.tutorialShown,
               paulRescued: true, // flag for notification
+              playerAttackBonus: this.playerAttackBonus,
+              unlockedTeleports: this.unlockedTeleports,
             });
           });
         });
@@ -2688,6 +2855,11 @@ export class GameScene extends Phaser.Scene {
       scale = 1.3;
     }
 
+    // Clamp to camera viewport so numbers don't fly off-screen
+    const cam = this.cameras.main;
+    x = Phaser.Math.Clamp(x, cam.scrollX + 12, cam.scrollX + cam.width - 12);
+    y = Phaser.Math.Clamp(y, cam.scrollY + 12, cam.scrollY + cam.height - 12);
+
     const text = this.add.text(x + (Math.random() - 0.5) * 8, y, `-${amount}`, {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
@@ -2709,6 +2881,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   showFloatingText(x, y, msg, color) {
+    // Clamp to camera viewport so text doesn't fly off-screen
+    const cam = this.cameras.main;
+    x = Phaser.Math.Clamp(x, cam.scrollX + 12, cam.scrollX + cam.width - 12);
+    y = Phaser.Math.Clamp(y, cam.scrollY + 12, cam.scrollY + cam.height - 12);
+
     const text = this.add.text(x + (Math.random() - 0.5) * 6, y, msg, {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
@@ -2740,6 +2917,25 @@ export class GameScene extends Phaser.Scene {
   // --- Environmental decoration ---
   decorateWorld(map) {
     const ts = map.tileSize;
+
+    // Forest map decorations
+    if (map.name === 'forest') {
+      this._decorateForest(map);
+      return;
+    }
+
+    // Town2 decorations
+    if (map.name === 'town2') {
+      this._decorateTown2(map);
+      return;
+    }
+
+    // Forest boss decorations
+    if (map.name === 'forest_boss') {
+      return; // No extra decorations for boss arena
+    }
+
+    // --- Overworld decorations below ---
 
     // Biome overlays
     for (const biome of (map.biomes || [])) {
@@ -2862,14 +3058,40 @@ export class GameScene extends Phaser.Scene {
       fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#888866',
     }).setOrigin(0.5).setDepth(caveY + 1);
 
-    // Forest dungeon entrance
+    // Forest entrance — path leading south
     const forestX = 80;
     const forestY = 420;
-    this.add.rectangle(forestX, forestY, 28, 20, 0x224422).setDepth(forestY - 1);
-    this.add.rectangle(forestX, forestY - 10, 30, 6, 0x335533).setDepth(forestY);
-    this.add.text(forestX, forestY - 18, 'FOREST', {
+    // Path stones leading to exit
+    for (let i = 0; i < 4; i++) {
+      this.add.rectangle(forestX + i * 6 - 9, forestY + i * 4, 6, 4, 0x887755).setDepth(forestY - 2);
+    }
+    this.add.rectangle(forestX, forestY, 28, 16, 0x335533).setDepth(forestY - 1);
+    this.add.text(forestX, forestY - 14, 'FOREST', {
       fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#668866',
     }).setOrigin(0.5).setDepth(forestY + 1);
+
+    // Signpost near forest entrance
+    this.add.rectangle(120, 410, 2, 12, 0x664422).setDepth(411);
+    this.add.rectangle(120, 404, 24, 8, 0x885533).setDepth(412);
+    this.add.text(120, 404, '→ Woods', {
+      fontSize: '6px', fontFamily: 'Arial, sans-serif', color: '#ddccaa',
+    }).setOrigin(0.5).setDepth(413);
+
+    // Teleport stone visual in overworld
+    if (map.teleportStone) {
+      const ts2 = map.teleportStone;
+      // Stone base
+      this.add.rectangle(ts2.x, ts2.y + 4, 16, 8, 0x666677).setDepth(ts2.y);
+      // Crystal
+      this.add.triangle(ts2.x, ts2.y - 4, -4, 6, 4, 6, 0, -6, 0x4488ff).setDepth(ts2.y + 1);
+      // Pulsing glow
+      const glow = this.add.circle(ts2.x, ts2.y - 4, 8, 0x4488ff, 0.2).setDepth(ts2.y - 1);
+      this.tweens.add({ targets: glow, alpha: 0.4, duration: 1200, yoyo: true, repeat: -1 });
+      // Label
+      this.add.text(ts2.x, ts2.y + 12, ts2.name, {
+        fontSize: '6px', fontFamily: 'Arial, sans-serif', color: '#88aaff', stroke: '#000000', strokeThickness: 1,
+      }).setOrigin(0.5).setDepth(ts2.y + 2);
+    }
 
     // Rocks
     const rocks = [
@@ -2887,6 +3109,233 @@ export class GameScene extends Phaser.Scene {
       const zone = this.add.zone(r.x, r.y, 6, 4);
       this.obstacles.add(zone);
     }
+  }
+
+  _decorateForest() {
+    // Scattered small trees and mushrooms on walkable tiles
+    const forestDecorations = [
+      { x: 180, y: 60, type: 'mushroom' },
+      { x: 300, y: 100, type: 'mushroom' },
+      { x: 100, y: 220, type: 'log' },
+      { x: 350, y: 300, type: 'mushroom' },
+      { x: 200, y: 350, type: 'log' },
+      { x: 450, y: 200, type: 'mushroom' },
+      { x: 280, y: 450, type: 'log' },
+      { x: 150, y: 480, type: 'mushroom' },
+    ];
+    for (const d of forestDecorations) {
+      if (d.type === 'mushroom') {
+        this.add.circle(d.x, d.y + 2, 2, 0x885533).setDepth(d.y);
+        this.add.circle(d.x, d.y, 3, 0xcc4444).setDepth(d.y + 1);
+        this.add.circle(d.x - 1, d.y - 1, 1, 0xffdddd).setDepth(d.y + 2);
+      } else if (d.type === 'log') {
+        this.add.rectangle(d.x, d.y, 18, 5, 0x664422).setDepth(d.y);
+        this.add.rectangle(d.x, d.y - 1, 16, 3, 0x885533).setDepth(d.y + 1);
+      }
+    }
+    // Flowers in forest clearings
+    const forestFlowers = [
+      { x: 200, y: 120, color: 0xff88cc },
+      { x: 350, y: 250, color: 0xffdd44 },
+      { x: 120, y: 360, color: 0x88ccff },
+      { x: 400, y: 350, color: 0xff6b6b },
+      { x: 260, y: 500, color: 0xffdd44 },
+    ];
+    for (const f of forestFlowers) {
+      this.add.circle(f.x, f.y + 2, 1, 0x44aa44).setDepth(1);
+      this.add.circle(f.x, f.y, 2, f.color).setDepth(2);
+    }
+    // Path stones between entrances
+    const pathStones = [
+      { x: 320, y: 520 }, { x: 300, y: 500 }, { x: 280, y: 480 },
+      { x: 260, y: 460 }, { x: 240, y: 440 }, { x: 220, y: 420 },
+      { x: 200, y: 400 }, { x: 180, y: 380 }, { x: 170, y: 350 },
+      { x: 160, y: 320 }, { x: 155, y: 280 }, { x: 155, y: 240 },
+      { x: 155, y: 200 }, { x: 155, y: 160 }, { x: 155, y: 120 },
+      { x: 155, y: 80 }, { x: 155, y: 50 },
+    ];
+    for (const s of pathStones) {
+      this.add.rectangle(s.x, s.y, 6, 4, 0x887766, 0.5).setDepth(0);
+    }
+  }
+
+  _decorateTown2(map) {
+    // Town paths
+    const pathAreas = [
+      // Main east-west path
+      { x1: 0, y1: 13, x2: 35, y2: 15 },
+      // Path to shop
+      { x1: 16, y1: 6, x2: 19, y2: 13 },
+      // Path to inn
+      { x1: 25, y1: 11, x2: 28, y2: 15 },
+    ];
+    const ts = map.tileSize;
+    for (const p of pathAreas) {
+      for (let row = p.y1; row < p.y2; row++) {
+        for (let col = p.x1; col < p.x2; col++) {
+          this.add.image(col * ts, row * ts, 'path-middle').setOrigin(0, 0);
+        }
+      }
+    }
+
+    // Flowers
+    const flowers = [
+      { x: 140, y: 150, color: 0xff88cc },
+      { x: 350, y: 120, color: 0xffdd44 },
+      { x: 200, y: 320, color: 0x88ccff },
+      { x: 400, y: 340, color: 0xff6b6b },
+    ];
+    for (const f of flowers) {
+      this.add.circle(f.x, f.y + 2, 1, 0x44aa44).setDepth(1);
+      this.add.circle(f.x, f.y, 2, f.color).setDepth(2);
+    }
+
+    // Fences
+    const fencePositions = [
+      { x: 100, y: 100, w: 60 },
+      { x: 400, y: 280, w: 40 },
+    ];
+    for (const fence of fencePositions) {
+      for (let i = 0; i < fence.w; i += 8) {
+        // Post
+        this.add.rectangle(fence.x + i, fence.y, 2, 8, 0x885533).setDepth(fence.y);
+        // Rail
+        this.add.rectangle(fence.x + i + 4, fence.y - 2, 8, 2, 0x996644).setDepth(fence.y);
+      }
+      const zone = this.add.zone(fence.x + fence.w / 2, fence.y, fence.w, 8);
+      this.obstacles.add(zone);
+    }
+
+    // Teleport stone visual
+    if (map.teleportStone) {
+      const ts2 = map.teleportStone;
+      this.add.rectangle(ts2.x, ts2.y + 4, 16, 8, 0x666677).setDepth(ts2.y);
+      this.add.triangle(ts2.x, ts2.y - 4, -4, 6, 4, 6, 0, -6, 0x4488ff).setDepth(ts2.y + 1);
+      const glow = this.add.circle(ts2.x, ts2.y - 4, 8, 0x4488ff, 0.2).setDepth(ts2.y - 1);
+      this.tweens.add({ targets: glow, alpha: 0.4, duration: 1200, yoyo: true, repeat: -1 });
+      this.add.text(ts2.x, ts2.y + 12, ts2.name, {
+        fontSize: '6px', fontFamily: 'Arial, sans-serif', color: '#88aaff', stroke: '#000000', strokeThickness: 1,
+      }).setOrigin(0.5).setDepth(ts2.y + 2);
+    }
+
+    // Welcome sign
+    this.add.rectangle(160, 200, 2, 12, 0x664422).setDepth(201);
+    this.add.rectangle(160, 194, 36, 10, 0x885533).setDepth(202);
+    this.add.text(160, 194, 'Woodhaven', {
+      fontSize: '6px', fontFamily: 'Arial, sans-serif', color: '#ddccaa',
+    }).setOrigin(0.5).setDepth(203);
+  }
+
+  _spawnTeleportStone() {
+    const map = this.mapData;
+    if (!map.teleportStone) return;
+
+    const ts = map.teleportStone;
+    // Create overlap zone for the teleport stone
+    this.teleportStoneZone = this.add.zone(ts.x, ts.y, 24, 24);
+    this.physics.add.existing(this.teleportStoneZone, true);
+    this.teleportStoneZone.stoneName = ts.name;
+    this.teleportStoneZone.stoneMap = map.name;
+
+    this.physics.add.overlap(this.player, this.teleportStoneZone, () => {
+      this._nearTeleportStone = true;
+    });
+    this._nearTeleportStone = false;
+  }
+
+  _handleTeleportStone() {
+    if (!this._nearTeleportStone || !this.teleportStoneZone) return;
+    this._nearTeleportStone = false; // reset each frame, re-set by overlap
+
+    if (!Phaser.Input.Keyboard.JustDown(this.interactKey)) return;
+
+    const mapName = this.teleportStoneZone.stoneMap;
+    const stoneName = this.teleportStoneZone.stoneName;
+
+    if (!this.unlockedTeleports.includes(mapName)) {
+      // Unlock this teleport
+      this.unlockedTeleports.push(mapName);
+      this.sfx.play('wizardTeleport');
+      this.showNotification(`Teleport unlocked: ${stoneName}!`);
+      // Flash the stone
+      const flash = this.add.circle(this.teleportStoneZone.x, this.teleportStoneZone.y - 4, 16, 0x4488ff, 0.6);
+      flash.setDepth(10000);
+      this.tweens.add({ targets: flash, alpha: 0, radius: 30, duration: 500, onComplete: () => flash.destroy() });
+    } else {
+      this.showNotification('Teleport stone active.\nOpen map (M) to teleport.');
+    }
+  }
+
+  _teleportTo(targetMapName) {
+    const targetMap = MAPS[targetMapName];
+    if (!targetMap || !targetMap.teleportStone) return;
+
+    this.sfx.play('wizardTeleport');
+    if (this.music) this.music.fadeOut(0.3);
+
+    const questState = this.questManager.saveState();
+    const playerHealth = this.player.health;
+
+    this._irisWipeOut(() => {
+      this.scene.stop('UI');
+      this.scene.restart({
+        mapData: {
+          ...targetMap,
+          playerSpawn: { x: targetMap.teleportStone.x, y: targetMap.teleportStone.y + 16 },
+        },
+        questState: questState,
+        playerHealth: playerHealth,
+        gold: this.gold,
+        xp: this.xp,
+        level: this.level,
+        inventory: this.inventory.saveState(),
+        dayTime: this.dayTime,
+        equipment: this.equipment.saveState(),
+        openedChests: this._getOpenedChests(),
+        trackedQuestId: this.trackedQuestId,
+        bestiary: this.bestiary,
+        timedQuestId: this._timedQuestId,
+        timedRemaining: this._timedRemaining,
+        tutorialShown: this.tutorialShown,
+        escortActive: this._escortActive,
+        escortNpcId: this._escortNPC ? this._escortNPC.npcId : null,
+        playerAttackBonus: this.playerAttackBonus,
+        unlockedTeleports: this.unlockedTeleports,
+      });
+    });
+  }
+
+  spawnTown2NPCs() {
+    // Guard NPC
+    const guard = new NPC(this, 180, 240, 'lumberjack-jack', {
+      id: 'town2_guard',
+      name: 'Guard',
+      idleAnim: 'npc-jack-idle-down',
+      dialogueLines: [
+        'Welcome to Woodhaven!\nWe\'re a quiet forest village.',
+        'The forest to the west\nis dangerous. Be careful!',
+      ],
+    });
+    guard.setTint(0x8888cc); // Blue tint for guard
+    this.npcs.add(guard);
+
+    // Villager NPC
+    const villager = new NPC(this, 350, 300, 'farmer-buba', {
+      id: 'town2_villager',
+      name: 'Elder Moss',
+      idleAnim: 'npc-buba-idle-down',
+      wanders: true,
+      speed: 8,
+      wanderRadius: 25,
+      wanderAnims: { down: 'npc-buba-walk-down', right: 'npc-buba-walk-right', up: 'npc-buba-walk-up' },
+      dialogueLines: [
+        'Woodhaven was founded by\ntravelers who braved the forest.',
+        'The teleport stones were built\nby ancient wizards long ago.',
+        'Trade between our towns keeps\nus all prosperous!',
+      ],
+    });
+    villager.setTint(0x99bb99); // Green tint for elder
+    this.npcs.add(villager);
   }
 
   _getVariedDialogue(npc, defaultLines) {
@@ -2938,6 +3387,54 @@ export class GameScene extends Phaser.Scene {
 
     const lineIndex = (npc._dialogueIndex - 1) % extraLines.length;
     return [greeting + extraLines[lineIndex]];
+  }
+
+  _handleBedRest() {
+    if (this.mapData.name !== 'house_interior') return false;
+    let found = false;
+    this.obstacles.getChildren().forEach((zone) => {
+      if (!zone.isBed) return;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, zone.x, zone.y);
+      if (d < 35 && !found) {
+        found = true;
+        this.showDialogue(['Rest until morning?\nYou feel at home here.'], () => {
+          // Restore 2 HP and set time to dawn
+          const healed = Math.min(2, this.player.maxHealth - this.player.health);
+          if (healed > 0) {
+            this.player.health += healed;
+            this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+          }
+          this.dayTime = 0.3; // dawn
+          // Rest visual
+          const cam = this.cameras.main;
+          const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0)
+            .setScrollFactor(0).setDepth(12000);
+          const text = this.add.text(cam.width / 2, cam.height / 2, 'Zzz...', {
+            fontSize: '14px', fontFamily: 'Arial, sans-serif', color: '#ffffff',
+            fontStyle: 'bold',
+          }).setOrigin(0.5).setScrollFactor(0).setDepth(12001).setAlpha(0);
+          this.tweens.add({
+            targets: overlay, alpha: 1, duration: 300,
+            onComplete: () => {
+              this.tweens.add({ targets: text, alpha: 1, duration: 200 });
+              this.time.delayedCall(500, () => {
+                this.sfx.play('potionUse');
+                this.tweens.add({
+                  targets: [overlay, text], alpha: 0, duration: 300,
+                  onComplete: () => {
+                    overlay.destroy();
+                    text.destroy();
+                    const msg = healed > 0 ? `Rested! +${healed} HP` : 'Rested until morning.';
+                    this.showNotification(msg);
+                  },
+                });
+              });
+            },
+          });
+        });
+      }
+    });
+    return found;
   }
 
   _handleBookshelf() {
@@ -3029,13 +3526,29 @@ export class GameScene extends Phaser.Scene {
         this.player.x, this.player.y,
         this.worldWidth, this.worldHeight,
         this.isOverworld ? this.npcs : null,
-        this.isOverworld ? this.questManager : null
+        this.isOverworld ? this.questManager : null,
+        this.mapData.name,
+        this.unlockedTeleports
       );
       return;
     }
 
-    // Block input while overlay is open
-    if (this.overlayOpen) return;
+    // Block input while overlay is open (but handle teleport)
+    if (this.overlayOpen) {
+      this.mapOverlay.handleInput();
+      if (this.mapOverlay._pendingTeleport) {
+        const dest = this.mapOverlay._pendingTeleport;
+        this.mapOverlay._pendingTeleport = null;
+        this.mapOverlay.hide();
+        this.overlayOpen = false;
+        this._teleportTo(dest);
+      }
+      return;
+    }
+
+    // Teleport stone interaction
+    this._handleTeleportStone();
+    this._nearTeleportStone = false; // Reset each frame
 
     // Shop menu input
     if (this._shopActive) {
@@ -3128,6 +3641,8 @@ export class GameScene extends Phaser.Scene {
         this.handleNPCInteraction();
       } else if (this.handleChestOpen()) {
         // Chest was opened
+      } else if (this._handleBedRest()) {
+        // Bed rest interaction
       } else if (this._handleBookshelf()) {
         // Bookshelf was read
       } else if (this._nearPond && this.isOverworld) {
@@ -3166,6 +3681,10 @@ export class GameScene extends Phaser.Scene {
     if (this.pet) {
       this.pet.update(time, delta, this.player);
       this.pet.collectNearbyLoot(this);
+      // Pet bark ability (P key)
+      if (Phaser.Input.Keyboard.JustDown(this.petBarkKey)) {
+        this.pet.bark(this);
+      }
     }
 
     // Update chests

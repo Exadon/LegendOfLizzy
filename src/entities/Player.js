@@ -72,6 +72,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         if (this.comboCount === 0) {
           this.comboCount = 1;
           this.comboWindow = this.comboWindowDuration;
+          this._showComboWindowGlow();
         } else {
           this.comboCount = 0;
           this.comboWindow = 0;
@@ -448,6 +449,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  _showComboWindowGlow() {
+    const weaponColor = this._getWeaponColor();
+    const glow = this.scene.add.circle(this.x, this.y, 14, weaponColor, 0.25);
+    glow.setDepth(this.depth - 1);
+    // Shrink over the combo window duration then disappear
+    this.scene.tweens.add({
+      targets: glow,
+      radius: 2,
+      alpha: 0,
+      duration: this.comboWindowDuration,
+      ease: 'Power2',
+      onComplete: () => glow.destroy(),
+    });
+  }
+
   _comboSparkEffect() {
     const offsets = {
       down: { x: 0, y: 16 },
@@ -488,6 +504,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.scene.time.delayedCall(100, () => {
       if (this.active) this.clearTint();
     });
+
+    // Camera shake on hit (not on death — death has its own)
+    if (this.health > 0) {
+      this.scene.cameras.main.shake(120, 0.009);
+    }
 
     // Knockback away from current facing
     const knockback = 120;

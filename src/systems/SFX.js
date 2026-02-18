@@ -302,6 +302,71 @@ export class SFX {
     this._osc('square', 400, 200, 0.12, 0.1);
   }
 
+  // Chest open - wooden creak + ascending coin jingle
+  _chestOpen() {
+    // Wooden creak
+    this._osc('sawtooth', 100, 60, 0.12, 0.08);
+    // Ascending coin jingle
+    const t = this.ctx.currentTime;
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + 0.08 + i * 0.06);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.setValueAtTime(0.08, t + 0.08 + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08 + i * 0.06 + 0.1);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t + 0.08);
+      osc.stop(t + 0.08 + i * 0.06 + 0.12);
+    });
+  }
+
+  // Fish cast - whoosh + water plop
+  _fishCast() {
+    this._osc('sawtooth', 400, 150, 0.1, 0.06);
+    // Water plop
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, t + 0.1);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.22);
+    gain.gain.setValueAtTime(0.1, t + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t + 0.1);
+    osc.stop(t + 0.25);
+  }
+
+  // Fish catch - bubbly ascending arpeggio
+  _fishCatch() {
+    const t = this.ctx.currentTime;
+    const notes = [392, 494, 587, 698, 784];
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.06);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.setValueAtTime(0.09, t + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + i * 0.06 + 0.15);
+    });
+  }
+
+  // Pet bark - short yappy burst
+  _petBark() {
+    this._osc('square', 500, 800, 0.06, 0.1);
+    this._osc('sawtooth', 600, 300, 0.08, 0.06);
+  }
+
   // Chicken collect - ascending chirp pair
   _chickenCollect() {
     this._osc('sine', 800, 1400, 0.08, 0.1);
