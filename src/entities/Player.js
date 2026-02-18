@@ -252,12 +252,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.chargeGlow.setRadius(baseRadius + pulse);
     this.chargeGlow.setAlpha(0.15 + progress * 0.3);
     this.chargeGlow.setFillStyle(fullyCharged ? chargedColor : weaponColor, this.chargeGlow.alpha);
+
+    // Show "READY!" text when fully charged
+    if (fullyCharged && !this._chargeReadyText) {
+      this._chargeReadyText = this.scene.add.text(this.x, this.y - 28, 'READY!', {
+        fontSize: '8px', fontFamily: 'Arial, sans-serif',
+        color: '#ffdd00', stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(9999);
+      this.scene.tweens.add({
+        targets: this._chargeReadyText,
+        scaleX: 1.2, scaleY: 1.2, alpha: 0.6,
+        duration: 300, yoyo: true, repeat: -1,
+      });
+    }
+    if (this._chargeReadyText) {
+      this._chargeReadyText.setPosition(this.x, this.y - 28);
+    }
   }
 
   _clearChargeGlow() {
     if (this.chargeGlow) {
       this.chargeGlow.destroy();
       this.chargeGlow = null;
+    }
+    if (this._chargeReadyText) {
+      this._chargeReadyText.destroy();
+      this._chargeReadyText = null;
     }
   }
 
@@ -499,9 +519,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.invulnerable = true;
     this.invulnerableTimer = 1000;
 
-    // White damage flash (100ms)
+    // White damage flash (200ms for better feedback)
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(100, () => {
+    this.scene.time.delayedCall(200, () => {
       if (this.active) this.clearTint();
     });
 

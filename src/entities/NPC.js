@@ -43,7 +43,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
       strokeThickness: 3,
     }).setOrigin(0.5).setVisible(false).setDepth(9999);
 
-    // Quest indicator (! or ?)
+    // Quest indicator (! or ?) with pulsing animation
     this.questIcon = scene.add.text(x, y - 48, '', {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
@@ -51,6 +51,11 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(9999);
+    scene.tweens.add({
+      targets: this.questIcon,
+      scaleX: 1.3, scaleY: 1.3,
+      duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
 
     this.canInteract = false;
 

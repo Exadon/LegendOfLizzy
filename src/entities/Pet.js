@@ -43,10 +43,12 @@ export class Pet extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(0, 0);
     }
 
-    // Gentle bob
+    // Gentle bob (apply to base position to prevent drift)
     this._bobTimer += delta;
+    if (!this._baseY) this._baseY = this.y;
+    if (dist > 20) this._baseY = this.y; // update base while moving
     const bob = Math.sin(this._bobTimer / 300) * 1.5;
-    this.setY(this.y + bob * 0.05); // subtle
+    if (dist <= 20) this.setY(this._baseY + bob * 0.3);
 
     this.setDepth(this.y);
   }

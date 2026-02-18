@@ -131,9 +131,16 @@ export class TitleScene extends Phaser.Scene {
 
     // Check for save data
     const hasSave = SaveManager.hasSave();
+    let saveInfo = '';
+    if (hasSave) {
+      const save = SaveManager.load();
+      if (save) {
+        saveInfo = ` (Lv.${save.level || 1})`;
+      }
+    }
 
     // Press ENTER prompt
-    const promptText = hasSave ? 'ENTER: Continue  N: New Game' : 'Press ENTER';
+    const promptText = hasSave ? `ENTER: Continue${saveInfo}  N: New` : 'Press ENTER';
     const prompt = this.add.text(w / 2, h - 36, promptText, {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',

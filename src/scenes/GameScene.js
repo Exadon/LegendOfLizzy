@@ -1334,6 +1334,28 @@ export class GameScene extends Phaser.Scene {
     this.sfx.play('chestOpen');
     this.cameras.main.shake(50, 0.004);
 
+    // Chest opening animation — scale pop + sparkles
+    if (nearest.sprite) {
+      this.tweens.add({
+        targets: nearest.sprite,
+        scaleX: 1.3, scaleY: 1.3,
+        duration: 150, yoyo: true, ease: 'Back.easeOut',
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const sparkle = this.add.circle(nearest.x, nearest.y - 8, 2, 0xffdd00, 0.9);
+      sparkle.setDepth(9999);
+      this.tweens.add({
+        targets: sparkle,
+        x: nearest.x + Math.cos(angle) * 18,
+        y: nearest.y - 8 + Math.sin(angle) * 18,
+        alpha: 0, scale: 0.2,
+        duration: 400, ease: 'Power2',
+        onComplete: () => sparkle.destroy(),
+      });
+    }
+
     if (loot.type === 'gold') {
       this.addGold(loot.amount);
     } else if (loot.type === 'potion') {
@@ -2036,6 +2058,15 @@ export class GameScene extends Phaser.Scene {
       this.showNotification(`Level Up! Lv.${this.level}${bonusMsg}`);
       this.sfx.play('levelUp');
 
+      // Check for spell unlocks at this level
+      for (const spell of this.spells) {
+        if (spell.minLevel === this.level) {
+          this.time.delayedCall(1200, () => {
+            this.showNotification(`New Spell: ${spell.name}! (TAB to select)`);
+          });
+        }
+      }
+
       // Level-up effects: camera zoom pulse
       this.cameras.main.zoomTo(1.05, 250, 'Sine.easeOut', false, (cam, progress) => {
         if (progress === 1) this.cameras.main.zoomTo(1, 250, 'Sine.easeIn');
@@ -2409,7 +2440,14 @@ export class GameScene extends Phaser.Scene {
         this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
       }
       this.sfx.play('heal');
-      this.showNotification(`+${healed} HP`);
+      this.showFloatingText(this.player.x, this.player.y - 20, `+${healed} HP`, '#44ff44');
+      // Green flash overlay
+      const healFlash = this.add.rectangle(
+        this.cameras.main.width / 2, this.cameras.main.height / 2,
+        this.cameras.main.width, this.cameras.main.height,
+        0x44ff44, 0.15
+      ).setScrollFactor(0).setDepth(9998);
+      this.tweens.add({ targets: healFlash, alpha: 0, duration: 300, onComplete: () => healFlash.destroy() });
       // Green healing particles
       for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2;

@@ -125,7 +125,7 @@ export class Pharaoh extends Phaser.Physics.Arcade.Sprite {
       } else if (dy > 0) {
         this.play('pharaoh-walk-down', true);
       } else {
-        this.play('pharaoh-idle-up', true);
+        this.play('pharaoh-walk-up', true);
       }
     } else {
       this.setVelocity(0, 0);

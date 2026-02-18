@@ -111,6 +111,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount = 1, sourceX, sourceY) {
+    if (this._dying) return;
     this.health -= amount;
     this.isHurt = true;
     this.hurtTimer = 250;
@@ -134,10 +135,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     // Knockback away from damage source
     if (sourceX !== undefined && sourceY !== undefined) {
       const angle = Phaser.Math.Angle.Between(sourceX, sourceY, this.x, this.y);
-      this.setVelocity(Math.cos(angle) * 150, Math.sin(angle) * 150);
+      this.setVelocity(Math.cos(angle) * 180, Math.sin(angle) * 180);
     }
 
     if (this.health <= 0) {
+      this._dying = true;
       this.destroy();
     }
   }
