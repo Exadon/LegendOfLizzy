@@ -28,6 +28,7 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     this.slamCooldown = 0;
     this.summonCooldown = 0;
     this.hasSummoned = false;
+    this._timers = [];
 
     // Health bar
     this.healthBarBg = scene.add.rectangle(x, y - 30, 50, 5, 0x333333).setDepth(10000);
@@ -35,8 +36,8 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     this.healthBarFill.setOrigin(0, 0.5);
     this.healthBarBg.setOrigin(0, 0.5);
     this.nameText = scene.add.text(x + 25, y - 38, 'SKELETON KING', {
-      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#ff6666',
-      stroke: '#000000', strokeThickness: 2,
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#ff6666',
+      stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5, 1).setDepth(10002);
 
     this.play('skeleton-idle-down');
@@ -48,12 +49,44 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     // Phase check
     if (this.health <= this.maxHealth / 2 && this.phase === 1) {
       this.phase = 2;
-      this.setTint(0xff2222);
       this.speed = 35;
-      // Phase 2 announcement
       const scene = this.scene;
       scene.showNotification('Skeleton King enrages!');
-      scene.cameras.main.shake(200, 0.01);
+      scene.cameras.main.shake(300, 0.015);
+
+      // 1s invulnerability during transition
+      this._phaseInvuln = true;
+      this._addTimer(scene.time.delayedCall(1000, () => { this._phaseInvuln = false; }));
+
+      // Screen color flash
+      const flash = scene.add.rectangle(
+        scene.cameras.main.width / 2, scene.cameras.main.height / 2,
+        scene.cameras.main.width, scene.cameras.main.height,
+        0xff4444, 0.35
+      ).setScrollFactor(0).setDepth(9998);
+      scene.tweens.add({ targets: flash, alpha: 0, duration: 500, onComplete: () => flash.destroy() });
+
+      // Scale pulse 1.3→1.0
+      this.setScale(3.25); // 2.5 * 1.3
+      scene.tweens.add({ targets: this, scale: 2.5, duration: 600, ease: 'Bounce.easeOut' });
+
+      // Ring burst of 16 particles
+      for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const colors = [0xff4444, 0xff2222, 0xffdd00, 0xffffff];
+        const p = scene.add.circle(this.x, this.y, 3, colors[i % 4], 0.9);
+        p.setDepth(9999);
+        scene.tweens.add({
+          targets: p,
+          x: this.x + Math.cos(angle) * 35,
+          y: this.y + Math.sin(angle) * 35,
+          alpha: 0, scale: 0.2, duration: 500, ease: 'Power2',
+          onComplete: () => p.destroy(),
+        });
+      }
+
+      // Set tint after flash
+      this._addTimer(scene.time.delayedCall(100, () => { if (this.active) this.setTint(0xff2222); }));
     }
 
     this.actionTimer -= delta;
@@ -111,39 +144,52 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     this.setVelocity(0, 0);
 
     const scene = this.scene;
+    const slamX = this.x;
+    const slamY = this.y;
 
-    // Wind-up
+    // Telegraph: red warning ring expanding over 500ms BEFORE damage
+    const warn = scene.add.circle(slamX, slamY, 0, 0xff4444, 0.0);
+    warn.setStrokeStyle(1.5, 0xff4444, 0.6);
+    warn.setDepth(9998);
     scene.tweens.add({
-      targets: this,
-      y: this.y - 8,
-      duration: 300,
-      yoyo: true,
+      targets: warn,
+      radius: 55,
+      alpha: 0.15,
+      duration: 500,
       onComplete: () => {
-        // Slam impact
-        scene.cameras.main.shake(150, 0.012);
-        scene.sfx.play('chargedSwing');
+        warn.destroy();
 
-        // AoE damage ring
-        const ring = scene.add.circle(this.x, this.y, 5, 0xff4444, 0.6);
-        ring.setDepth(9999);
+        // Wind-up + slam
         scene.tweens.add({
-          targets: ring,
-          radius: 55,
-          alpha: 0,
-          duration: 400,
-          onComplete: () => ring.destroy(),
+          targets: this,
+          y: this.y - 8,
+          duration: 300,
+          yoyo: true,
+          onComplete: () => {
+            scene.cameras.main.shake(150, 0.012);
+            scene.sfx.play('bossSlam');
+
+            // Impact ring
+            const ring = scene.add.circle(this.x, this.y, 5, 0xff4444, 0.6);
+            ring.setDepth(9999);
+            scene.tweens.add({
+              targets: ring, radius: 55, alpha: 0, duration: 400,
+              onComplete: () => ring.destroy(),
+            });
+
+            // Damage check
+            const dx = scene.player.x - this.x;
+            const dy = scene.player.y - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 55 && !scene.player.invulnerable) {
+              scene.player.takeDamage(this.phase === 2 ? 3 : 2);
+              scene.sfx.play('playerHurt');
+              if (scene.hitFreeze) scene.hitFreeze(50);
+            }
+
+            this.isSlaming = false;
+          },
         });
-
-        // Check if player is in range
-        const dx = scene.player.x - this.x;
-        const dy = scene.player.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 55 && !scene.player.invulnerable) {
-          scene.player.takeDamage(this.phase === 2 ? 3 : 2);
-          scene.sfx.play('playerHurt');
-        }
-
-        this.isSlaming = false;
       },
     });
   }
@@ -168,16 +214,34 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
         onComplete: () => poof.destroy(),
       });
 
-      scene.time.delayedCall(300, () => {
+      this._addTimer(scene.time.delayedCall(300, () => {
         if (this.health <= 0) return;
         const skel = scene.spawnSkeleton(sx, sy);
         skel.health = 2; // Weaker minions
-      });
+      }));
+    }
+  }
+
+  _addTimer(timer) {
+    this._timers.push(timer);
+    return timer;
+  }
+
+  pauseTimers() {
+    for (const t of this._timers) {
+      if (t && t.paused !== undefined) t.paused = true;
+    }
+  }
+
+  resumeTimers() {
+    for (const t of this._timers) {
+      if (t && t.paused !== undefined) t.paused = false;
     }
   }
 
   takeDamage(amount, fromX, fromY) {
     if (this.health <= 0) return;
+    if (this._phaseInvuln) return;
 
     this.health -= amount;
 
@@ -189,11 +253,11 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
 
     // Flash
     this.setTint(0xffffff);
-    this.scene.time.delayedCall(80, () => {
+    this._addTimer(this.scene.time.delayedCall(80, () => {
       if (this.active) {
         this.setTint(this.phase === 2 ? 0xff2222 : 0xff4444);
       }
-    });
+    }));
 
     if (this.health <= 0) {
       this._die();
@@ -234,6 +298,7 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     // Track quest
     const updated = scene.questManager.trackEvent('kill', { target: 'skeleton_king' });
     if (updated) scene.updateQuestTracker();
+    scene.events.emit('boss-defeated');
     if (scene.checkVictory) scene.checkVictory();
 
     // Cleanup
@@ -241,6 +306,7 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     this.healthBarFill.destroy();
     this.nameText.destroy();
 
+    this._timers = [];
     scene.time.delayedCall(600, () => {
       this.destroy();
     });

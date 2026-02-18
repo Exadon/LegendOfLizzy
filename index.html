@@ -20,7 +20,7 @@
       min-height: 100vh;
       overflow: hidden;
     }
-    canvas { image-rendering: pixelated; }
+    canvas { /* no image-rendering: pixelated — sprites use NEAREST in WebGL, text needs smooth browser upscale */ }
     /* Preload the font so it's ready when Phaser renders text */
     .font-preload { font-family: 'CuteFantasy'; position: absolute; left: -9999px; }
   </style>

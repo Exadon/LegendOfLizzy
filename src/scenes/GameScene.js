@@ -7,7 +7,7 @@ import { QuestManager, QUESTS } from '../systems/QuestManager.js';
 import { SFX } from '../systems/SFX.js';
 import { MAPS, OVERWORLD_MAP } from '../data/Maps.js';
 import { MapOverlay } from '../ui/MapOverlay.js';
-import { QuestBook } from '../ui/QuestBook.js';
+import { GameMenu } from '../ui/GameMenu.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { Inventory } from '../systems/Inventory.js';
 import { Music } from '../systems/Music.js';
@@ -18,6 +18,7 @@ import { Ghost } from '../entities/Ghost.js';
 import { SkeletonKing } from '../entities/Boss.js';
 import { Scorpion } from '../entities/Scorpion.js';
 import { Pharaoh } from '../entities/Pharaoh.js';
+import { OrcChief } from '../entities/OrcChief.js';
 import { FishingMinigame } from '../ui/FishingMinigame.js';
 import { EquipmentManager, EQUIPMENT } from '../systems/Equipment.js';
 import { Chest } from '../entities/Chest.js';
@@ -41,6 +42,12 @@ export class GameScene extends Phaser.Scene {
     this.paulRescued = data.paulRescued || false;
     this.savedOpenedChests = data.openedChests || [];
     this.savedTrackedQuestId = data.trackedQuestId || null;
+    this.savedBestiary = data.bestiary || {};
+    this.savedTimedQuestId = data.timedQuestId || null;
+    this.savedTimedRemaining = data.timedRemaining || 0;
+    this.savedTutorialShown = data.tutorialShown || false;
+    this.savedEscortActive = data.escortActive || false;
+    this.savedEscortNpcId = data.escortNpcId || null;
     // Prevent instant door re-trigger when spawning near an exit
     this._doorCooldown = !!data.mapData;
   }
@@ -61,6 +68,10 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('music', new Music());
     }
     this.music = this.registry.get('music');
+    // Apply saved mute preference to music
+    if (localStorage.getItem('lizzy-muted') === 'true' && this.music && this.music.masterGain && this.music.ctx) {
+      this.music.masterGain.gain.setValueAtTime(0, this.music.ctx.currentTime);
+    }
 
     // Quest system
     this.questManager = new QuestManager();
@@ -107,7 +118,8 @@ export class GameScene extends Phaser.Scene {
     if (map.hasBoss) {
       this.spawnBoss(map.bossType);
       this.time.delayedCall(800, () => {
-        const bossName = map.bossType === 'pharaoh' ? 'The Pharaoh' : 'The Skeleton King';
+        const bossNames = { pharaoh: 'The Pharaoh', skeleton_king: 'The Skeleton King', orc_chief: 'The Orc Chief' };
+        const bossName = bossNames[map.bossType] || 'A powerful foe';
         this.showNotification(`${bossName} awaits...`);
         this.cameras.main.shake(200, 0.008);
       });
@@ -148,15 +160,24 @@ export class GameScene extends Phaser.Scene {
     this.mapKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
-    // Pause menu key
+    // Menu key
     this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-    this._pauseOpen = false;
-    this._pauseContainer = null;
     this.trackedQuestId = this.savedTrackedQuestId || null;
 
     // Magic attack key
     this.magicKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+    this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
     this.magicProjectiles = this.add.group();
+
+    // Spell system: Fireball (lv1), Ice Bolt (lv3), Heal (lv5)
+    this.spells = [
+      { name: 'Fireball', color: 0xff6622, manaCost: 3, damage: 3, lifetime: 600, minLevel: 1 },
+      { name: 'Ice Bolt', color: 0x44aaff, manaCost: 4, damage: 2, lifetime: 1000, minLevel: 3, slow: true },
+      { name: 'Heal', color: 0x44ff44, manaCost: 7, healAmount: 2, cooldown: 3000, minLevel: 5, isHeal: true },
+    ];
+    this.currentSpellIndex = 0;
+    this._healCooldown = 0;
+    this._spellCooldown = 0;
 
     // Inventory hotbar keys
     this.itemKeys = [
@@ -241,7 +262,8 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Camera
+    // Camera — viewport below the 38px HUD bar
+    this.cameras.main.setViewport(0, 38, 320, 202);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
     this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
@@ -253,26 +275,16 @@ export class GameScene extends Phaser.Scene {
     this.dialogueCallback = null;
     this.createDialogueUI();
 
-    // Quest tracker UI (below inventory hotbar)
-    this.questTrackerText = this.add.text(this.cameras.main.width - 8, 28, '', {
-      fontSize: '9px',
-      fontFamily: 'CuteFantasy',
+    // Quest tracker UI (below inventory hotbar in top-right)
+    this.questTrackerText = this.add.text(this.cameras.main.width - 4, 4, '', {
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
       align: 'right',
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(9000);
     this.updateQuestTracker();
-
-    // Key hints HUD
-    const hintY = this.cameras.main.height - 8;
-    this.add.text(4, hintY, 'ESC:Menu M:Map Q:Quests SHIFT:Dodge 1-3:Items F:Magic', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
-      color: '#888888',
-      stroke: '#000000',
-      strokeThickness: 1,
-    }).setOrigin(0, 1).setScrollFactor(0).setDepth(9000);
 
     // Loot drops group
     this.lootDrops = this.add.group();
@@ -280,6 +292,46 @@ export class GameScene extends Phaser.Scene {
     // Hit-freeze state
     this._inHitFreeze = false;
     this._fairyAttackBuff = false;
+
+    // Bestiary (enemy kill tracking)
+    this.bestiary = this.savedBestiary || {};
+
+    // Escort quest state
+    this._escortNPC = null;
+    this._escortActive = false;
+
+    // Restore escort across map transitions
+    if (this.savedEscortActive && this.savedEscortNpcId && this.isOverworld) {
+      const escortQuest = this.questManager.getQuest('escort_chloe');
+      if (escortQuest && escortQuest.state === 'active') {
+        // Respawn the escort NPC near the player
+        this.time.delayedCall(100, () => {
+          this.npcs.getChildren().forEach((npc) => {
+            if (npc.npcId === this.savedEscortNpcId) {
+              npc.setPosition(this.player.x + 16, this.player.y + 16);
+              this._escortNPC = npc;
+              this._escortActive = true;
+              npc._isEscorted = true;
+            }
+          });
+        });
+      }
+    }
+
+    // Timed quest state — restore across map transitions
+    this._timedQuestId = this.savedTimedQuestId || null;
+    this._timedRemaining = this.savedTimedRemaining || 0;
+    this._timedText = null;
+    if (this._timedQuestId && this._timedRemaining > 0) {
+      this._timedText = this.add.text(this.cameras.main.width / 2, 14, '', {
+        fontSize: '12px', fontFamily: 'Arial, sans-serif',
+        color: '#ff4444', stroke: '#000000', strokeThickness: 3,
+        fontStyle: 'bold',
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(9500);
+    }
+
+    // Fetch quest: spawn collectible if active and in correct map
+    this._spawnFetchItems();
 
     // Gold and XP
     this.gold = this.savedGold || 0;
@@ -310,16 +362,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Map overlay and quest book
+    // Map overlay and game menu (unified pause + quests)
     this.mapOverlay = new MapOverlay(this);
-    this.questBook = new QuestBook(this);
+    this.gameMenu = new GameMenu(this);
     this.overlayOpen = false;
-
-    // Corner minimap (overworld only)
-    this.minimap = null;
-    if (this.isOverworld) {
-      this._setupMinimap();
-    }
 
     // Pet companion (unlocked after defeating Skeleton King)
     this.pet = null;
@@ -355,6 +401,9 @@ export class GameScene extends Phaser.Scene {
       ).setScrollFactor(0).setDepth(8000).setBlendMode(Phaser.BlendModes.MULTIPLY);
     }
 
+    // Boss defeat auto-save
+    this.events.on('boss-defeated', () => { SaveManager.save(this); });
+
     // Paul the Wizard rescue on death
     this.events.on('player-dying', () => this._paulRescue());
     this._paulRescueActive = false;
@@ -369,15 +418,39 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.fadeIn(400, 0, 0, 0);
     }
 
-    // Start music for this map
-    const trackName = this.isOverworld ? 'overworld' : (this.isTemple ? 'interior' : (this.isCave ? 'interior' : 'interior'));
+    // Start music for this map — map-based track selection
+    const mapName = map.name;
+    const trackMap = {
+      overworld: 'overworld',
+      cave: 'cave',
+      boss_room: 'boss',
+      desert_temple: 'desert',
+      pharaoh_chamber: 'boss',
+      forest_dungeon: 'cave',
+      forest_boss: 'boss',
+    };
+    const trackName = trackMap[mapName] || (mapName.includes('interior') ? 'interior' : 'interior');
     this.time.delayedCall(500, () => {
       this.music.play(trackName, this.sfx);
     });
 
+    // Cave darkness fog-of-war
+    this.darknessRT = null;
+    if (this.isCave) {
+      this.darknessRT = this.add.renderTexture(0, 0, 320, 202);
+      this.darknessRT.setScrollFactor(0);
+      this.darknessRT.setDepth(7999); // above world, below UI
+    }
+
     // Launch UI scene for hearts/game over only
     if (!this.scene.isActive('UI')) {
       this.scene.launch('UI');
+    }
+
+    // Controls tutorial on first game
+    this.tutorialShown = this.savedTutorialShown || false;
+    if (!this.tutorialShown && !this.savedQuestState) {
+      this._showTutorial();
     }
 
     // Emit state after UI is launched so displays render correctly
@@ -395,40 +468,59 @@ export class GameScene extends Phaser.Scene {
   createDialogueUI() {
     const w = this.cameras.main.width;
     const h = this.cameras.main.height;
-    const boxH = 56;
-    const boxY = h - boxH - 4;
+    const boxH = 54;
+    const boxY = h - boxH;
 
     this.dialogueContainer = this.add.container(0, 0)
       .setScrollFactor(0).setDepth(10000).setVisible(false);
 
-    const bg = this.add.nineslice(
-      w / 2, boxY + boxH / 2,
-      'ui-frames', 'panel-orange',
-      w - 12, boxH, 8, 8, 8, 8
-    );
+    // Full-width dark background
+    const bg = this.add.rectangle(w / 2, boxY + boxH / 2, w, boxH, 0x1a1020, 0.92);
     this.dialogueContainer.add(bg);
 
-    this.dialogueSpeaker = this.add.text(14, boxY + 4, '', {
-      fontSize: '9px',
-      fontFamily: 'CuteFantasy',
-      color: '#3d2510',
+    // Top border
+    const border = this.add.rectangle(w / 2, boxY, w, 1, 0x8b6d4a);
+    this.dialogueContainer.add(border);
+
+    // Portrait frame
+    const portraitSize = 28;
+    const portraitX = 4 + portraitSize / 2;
+    const portraitY = boxY + boxH / 2;
+    this.dialoguePortraitBg = this.add.rectangle(portraitX, portraitY, portraitSize + 4, portraitSize + 4, 0x3d2510);
+    this.dialoguePortraitBg.setVisible(false);
+    this.dialogueContainer.add(this.dialoguePortraitBg);
+    this.dialoguePortrait = this.add.image(portraitX, portraitY, '__DEFAULT');
+    this.dialoguePortrait.setDisplaySize(portraitSize, portraitSize);
+    this.dialoguePortrait.setVisible(false);
+    this.dialogueContainer.add(this.dialoguePortrait);
+
+    // Text offset when portrait is shown
+    const textX = 40;
+
+    // Speaker name
+    this.dialogueSpeaker = this.add.text(textX, boxY + 4, '', {
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ffdd00',
       fontStyle: 'bold',
     });
     this.dialogueContainer.add(this.dialogueSpeaker);
 
-    this.dialogueText = this.add.text(14, boxY + 14, '', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
-      color: '#2a1a08',
-      wordWrap: { width: w - 36 },
+    // Dialogue text
+    this.dialogueText = this.add.text(textX, boxY + 18, '', {
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#e8e0d0',
+      wordWrap: { width: w - textX - 16 },
       lineSpacing: 3,
     });
     this.dialogueContainer.add(this.dialogueText);
 
-    const arrow = this.add.text(w - 18, boxY + boxH - 10, '\u25BC', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
-      color: '#5c3a1e',
+    // Advance arrow
+    const arrow = this.add.text(w - 10, boxY + boxH - 6, '\u25BC', {
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#8b6d4a',
     }).setOrigin(1, 1);
     this.dialogueContainer.add(arrow);
 
@@ -450,23 +542,19 @@ export class GameScene extends Phaser.Scene {
     this.dialogueText.setText(lines[0]);
     this.dialogueContainer.setVisible(true);
     this.player.setVelocity(0, 0);
+    this.physics.pause();
+    if (this.boss && this.boss.pauseTimers) this.boss.pauseTimers();
     this.sfx.play('dialogue');
 
-    // Portrait
-    if (this.dialoguePortrait) {
-      this.dialoguePortrait.destroy();
-      this.dialoguePortrait = null;
-    }
-    if (portraitKey) {
-      const w = this.cameras.main.width;
-      const h = this.cameras.main.height;
-      const boxH = 56;
-      const boxY = h - boxH - 4;
-      this.dialoguePortrait = this.add.sprite(w - 34, boxY + boxH / 2, portraitKey, 0);
-      this.dialoguePortrait.setScale(0.7);
-      this.dialoguePortrait.setDepth(10001);
-      this.dialoguePortrait.setScrollFactor(0);
-      this.dialogueContainer.add(this.dialoguePortrait);
+    // Show portrait if available
+    const texKey = portraitKey ? `portrait-${portraitKey}` : null;
+    if (texKey && this.textures.exists(texKey)) {
+      this.dialoguePortrait.setTexture(texKey);
+      this.dialoguePortrait.setVisible(true);
+      this.dialoguePortraitBg.setVisible(true);
+    } else {
+      this.dialoguePortrait.setVisible(false);
+      this.dialoguePortraitBg.setVisible(false);
     }
   }
 
@@ -483,9 +571,10 @@ export class GameScene extends Phaser.Scene {
   closeDialogue() {
     this.dialogueContainer.setVisible(false);
     this.inDialogue = false;
-    if (this.dialoguePortrait) {
-      this.dialoguePortrait.destroy();
-      this.dialoguePortrait = null;
+    // Resume physics unless ESC menu is open
+    if (!this.gameMenu || !this.gameMenu.visible) {
+      this.physics.resume();
+      if (this.boss && this.boss.resumeTimers) this.boss.resumeTimers();
     }
     if (this.dialogueCallback) {
       this.dialogueCallback();
@@ -658,6 +747,33 @@ export class GameScene extends Phaser.Scene {
         top.setDepth(item.y + 1);
         const zone = this.add.zone(item.x, item.y, 28, 20);
         this.obstacles.add(zone);
+      } else if (item.type === 'bookshelf') {
+        const shelf = this.add.rectangle(item.x, item.y, 20, 28, 0x553311);
+        shelf.setDepth(item.y);
+        // Book rows
+        this.add.rectangle(item.x, item.y - 6, 16, 6, 0x884422).setDepth(item.y + 1);
+        this.add.rectangle(item.x, item.y + 2, 16, 6, 0x446688).setDepth(item.y + 1);
+        this.add.rectangle(item.x, item.y + 10, 16, 6, 0x668844).setDepth(item.y + 1);
+        const zone = this.add.zone(item.x, item.y, 20, 28);
+        this.obstacles.add(zone);
+        // Interactable bookshelf: lore text on E
+        if (item.lore !== false) {
+          zone.bookshelf = true;
+        }
+      } else if (item.type === 'barrel') {
+        const body = this.add.circle(item.x, item.y, 7, 0x885533);
+        body.setDepth(item.y);
+        this.add.circle(item.x, item.y, 5, 0x996644).setDepth(item.y + 1);
+        this.add.ellipse(item.x, item.y - 3, 12, 3, 0xaa7755).setDepth(item.y + 2);
+        const zone = this.add.zone(item.x, item.y, 14, 14);
+        this.obstacles.add(zone);
+      } else if (item.type === 'shelf') {
+        const shelf = this.add.rectangle(item.x, item.y, 18, 24, 0x664422);
+        shelf.setDepth(item.y);
+        this.add.rectangle(item.x, item.y - 4, 14, 4, 0xddaa44).setDepth(item.y + 1);
+        this.add.rectangle(item.x, item.y + 4, 14, 4, 0xcc8833).setDepth(item.y + 1);
+        const zone = this.add.zone(item.x, item.y, 18, 24);
+        this.obstacles.add(zone);
       }
     }
   }
@@ -692,6 +808,11 @@ export class GameScene extends Phaser.Scene {
       speed: 10,
       wanderRadius: 35,
       wanderAnims: { down: 'npc-buba-walk-down', right: 'npc-buba-walk-right', up: 'npc-buba-walk-up' },
+      schedule: [
+        { time: 0, x: 200, y: 160 },    // night: near home
+        { time: 0.3, x: 180, y: 180 },  // morning: fields
+        { time: 0.7, x: 200, y: 160 },  // evening: home
+      ],
     });
     this.npcs.add(buba);
 
@@ -714,12 +835,21 @@ export class GameScene extends Phaser.Scene {
     });
     this.npcs.add(chloe);
 
-    // Fisherman Fin - pond quest, stationary by pond
+    // Fisherman Fin - pond quest
     const fin = new NPC(this, 580, 310, 'fisherman-fin', {
       id: 'fisherman_fin',
       name: 'Fisherman Fin',
       questId: 'explore_pond',
       idleAnim: 'npc-fin-idle-down',
+      wanders: true,
+      speed: 8,
+      wanderRadius: 25,
+      wanderAnims: { down: 'npc-fin-walk-down', right: 'npc-fin-walk-right', up: 'npc-fin-walk-up' },
+      schedule: [
+        { time: 0, x: 720, y: 265 },    // night: inn
+        { time: 0.25, x: 580, y: 310 },  // dawn: dock by pond
+        { time: 0.7, x: 720, y: 265 },   // evening: inn
+      ],
     });
     this.npcs.add(fin);
 
@@ -752,8 +882,33 @@ export class GameScene extends Phaser.Scene {
       speed: 10,
       wanderRadius: 40,
       wanderAnims: { down: 'npc-mike-walk-down', right: 'npc-mike-walk-right', up: 'npc-mike-walk-up' },
+      schedule: [
+        { time: 0, x: 720, y: 265 },    // night: inn
+        { time: 0.25, x: 80, y: 100 },   // dawn: near mine entrance
+        { time: 0.5, x: 680, y: 250 },   // midday: fields
+        { time: 0.8, x: 720, y: 265 },   // evening: inn
+      ],
     });
     this.npcs.add(mike);
+
+    // Ranger Reed - forest dungeon quest, near southwest forest
+    const reed = new NPC(this, 120, 400, 'lumberjack-jack', {
+      id: 'ranger_reed',
+      name: 'Ranger Reed',
+      questId: 'clear_forest',
+      idleAnim: 'npc-jack-idle-down',
+      wanders: true,
+      speed: 10,
+      wanderRadius: 30,
+      wanderAnims: { down: 'npc-jack-walk-down', right: 'npc-jack-walk-right', up: 'npc-jack-walk-up' },
+      schedule: [
+        { time: 0, x: 120, y: 400 },
+        { time: 0.3, x: 100, y: 420 },
+        { time: 0.7, x: 120, y: 400 },
+      ],
+    });
+    reed.setTint(0x88bb88); // Green tint to distinguish from Jack
+    this.npcs.add(reed);
   }
 
   spawnInteriorNPCs(npcDefs) {
@@ -805,6 +960,17 @@ export class GameScene extends Phaser.Scene {
       this.enemySpawns.push({ ...pos, type: 'slime' });
       this.spawnSlime(pos.x, pos.y);
     }
+
+    // Goblins near forest entrance
+    const goblinPositions = [
+      { x: 60, y: 380 },
+      { x: 120, y: 440 },
+      { x: 140, y: 380 },
+    ];
+    for (const pos of goblinPositions) {
+      this.enemySpawns.push({ ...pos, type: 'goblin' });
+      this.spawnGoblin(pos.x, pos.y);
+    }
   }
 
   spawnSkeleton(x, y) {
@@ -846,6 +1012,10 @@ export class GameScene extends Phaser.Scene {
         this.spawnSlime(e.x, e.y);
       } else if (e.type === 'scorpion') {
         this.spawnScorpion(e.x, e.y);
+      } else if (e.type === 'goblin') {
+        this.spawnGoblin(e.x, e.y);
+      } else if (e.type === 'orc') {
+        this.spawnOrc(e.x, e.y);
       }
     }
   }
@@ -855,6 +1025,8 @@ export class GameScene extends Phaser.Scene {
     const cy = this.worldHeight * 0.35;
     if (bossType === 'pharaoh') {
       this.boss = new Pharaoh(this, cx, cy);
+    } else if (bossType === 'orc_chief') {
+      this.boss = new OrcChief(this, cx, cy);
     } else {
       this.boss = new SkeletonKing(this, cx, cy);
     }
@@ -865,6 +1037,35 @@ export class GameScene extends Phaser.Scene {
     const scorpion = new Scorpion(this, x, y);
     this.enemies.add(scorpion);
     return scorpion;
+  }
+
+  spawnGoblin(x, y) {
+    const goblin = new Enemy(this, x, y, 'goblin-thief', {
+      health: 3,
+      speed: 45,
+      idleAnim: 'goblin-idle-down',
+      enemyType: 'goblin',
+      walkAnims: { right: 'goblin-walk-right', down: 'goblin-walk-down', up: 'goblin-walk-up' },
+    });
+    goblin.body.setSize(12, 12);
+    goblin.body.setOffset(10, 16);
+    this.enemies.add(goblin);
+    return goblin;
+  }
+
+  spawnOrc(x, y) {
+    const orc = new Enemy(this, x, y, 'orc-grunt', {
+      health: 5,
+      speed: 30,
+      damage: 2,
+      idleAnim: 'orc-idle-down',
+      enemyType: 'orc',
+      walkAnims: { right: 'orc-walk-right', down: 'orc-walk-down', up: 'orc-walk-up' },
+    });
+    orc.body.setSize(14, 14);
+    orc.body.setOffset(9, 14);
+    this.enemies.add(orc);
+    return orc;
   }
 
   spawnChickens() {
@@ -1046,15 +1247,19 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Gold + XP reward
-      const rewards = { skeleton: { gold: 5, xp: 15 }, slime: { gold: 2, xp: 8 }, bat: { gold: 3, xp: 10 }, ghost: { gold: 8, xp: 25 }, scorpion: { gold: 6, xp: 18 } };
+      const rewards = { skeleton: { gold: 5, xp: 15 }, slime: { gold: 2, xp: 8 }, bat: { gold: 3, xp: 10 }, ghost: { gold: 8, xp: 25 }, scorpion: { gold: 6, xp: 18 }, goblin: { gold: 4, xp: 12 }, orc: { gold: 7, xp: 20 } };
       const reward = rewards[enemy.enemyType] || { gold: 3, xp: 10 };
       this.addGold(reward.gold);
       this.addXP(reward.xp);
 
+      // Track bestiary
+      if (enemy.enemyType && this.bestiary) {
+        this.bestiary[enemy.enemyType] = (this.bestiary[enemy.enemyType] || 0) + 1;
+      }
+
       // Queue respawn
       if (enemy.spawnX !== undefined && this.respawnQueue) {
-        const type = enemy.enemyType === 'skeleton' ? 'skeleton' : 'slime';
-        this.queueRespawn({ x: enemy.spawnX, y: enemy.spawnY, type });
+        this.queueRespawn({ x: enemy.spawnX, y: enemy.spawnY, type: enemy.enemyType || 'slime' });
       }
     }
   }
@@ -1065,6 +1270,7 @@ export class GameScene extends Phaser.Scene {
       player.takeDamage(enemy.damage + nightBonus);
       this.sfx.play('playerHurt');
       this.cameras.main.shake(80, 0.006);
+      this.hitFreeze(30);
     }
   }
 
@@ -1113,6 +1319,12 @@ export class GameScene extends Phaser.Scene {
         equipment: this.equipment.saveState(),
         openedChests: this._getOpenedChests(),
         trackedQuestId: this.trackedQuestId,
+        bestiary: this.bestiary,
+        timedQuestId: this._timedQuestId,
+        timedRemaining: this._timedRemaining,
+        tutorialShown: this.tutorialShown,
+        escortActive: this._escortActive,
+        escortNpcId: this._escortNPC ? this._escortNPC.npcId : null,
       });
     });
   }
@@ -1154,10 +1366,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Inn NPC
+    // Inn NPC — check for innkeeper quest first
     if (nearestNPC.role === 'inn') {
-      this.handleInnInteraction(nearestNPC);
-      return;
+      const medQuest = this.questManager.getQuest('urgent_medicine');
+      if (medQuest && (medQuest.state === 'available' || medQuest.state === 'active' || medQuest.state === 'ready')) {
+        // Fall through to quest handling below
+      } else {
+        this.handleInnInteraction(nearestNPC);
+        return;
+      }
     }
 
     // Check if this NPC is a turnIn target for a delivery quest
@@ -1262,7 +1479,98 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.showDialogue(lines, () => {
+    // Chef Chloe: chain special_delivery → escort_chloe
+    if (nearestNPC.npcId === 'chef_chloe') {
+      const deliveryQuest = this.questManager.getQuest('special_delivery');
+      const escortQuest = this.questManager.getQuest('escort_chloe');
+      if (deliveryQuest && deliveryQuest.state === 'completed' && escortQuest && escortQuest.state === 'available') {
+        this.showDialogue(escortQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('escort_chloe');
+          this._startEscort('chef_chloe');
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + escortQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (escortQuest && escortQuest.state === 'active') {
+        this.showDialogue(escortQuest.dialogue.active, null, name, portrait);
+        return;
+      }
+      if (escortQuest && escortQuest.state === 'ready') {
+        this.showDialogue(escortQuest.dialogue.ready, () => {
+          this.giveQuestReward('escort_chloe');
+          this.questManager.completeQuest('escort_chloe');
+          this.updateQuestTracker();
+          this.showNotification('Quest Complete!');
+          this.sfx.play('questComplete');
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Innkeeper: urgent_medicine (timed delivery quest)
+    if (nearestNPC.npcId === 'innkeeper') {
+      const medQuest = this.questManager.getQuest('urgent_medicine');
+      if (medQuest && medQuest.state === 'available') {
+        this.showDialogue(medQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('urgent_medicine');
+          this._startTimedQuest('urgent_medicine', medQuest.timeLimit);
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + medQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (medQuest && (medQuest.state === 'active' || medQuest.state === 'ready')) {
+        this.showDialogue(medQuest.dialogue[medQuest.state], () => {
+          if (medQuest.state === 'ready') {
+            this.giveQuestReward('urgent_medicine');
+            this.questManager.completeQuest('urgent_medicine');
+            this.updateQuestTracker();
+            this.showNotification('Quest Complete!');
+            this.sfx.play('questComplete');
+          }
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Lumberjack Jack: chain slime_cleanup → lost_axe
+    if (nearestNPC.npcId === 'lumberjack_jack') {
+      const slimeQuest = this.questManager.getQuest('slime_cleanup');
+      const axeQuest = this.questManager.getQuest('lost_axe');
+      if (slimeQuest && slimeQuest.state === 'completed' && axeQuest && axeQuest.state === 'available') {
+        this.showDialogue(axeQuest.dialogue.available, () => {
+          this.questManager.acceptQuest('lost_axe');
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + axeQuest.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (axeQuest && (axeQuest.state === 'active' || axeQuest.state === 'ready')) {
+        const aLines = axeQuest.dialogue[axeQuest.state];
+        this.showDialogue(aLines, () => {
+          if (axeQuest.state === 'ready') {
+            this.giveQuestReward('lost_axe');
+            this.questManager.completeQuest('lost_axe');
+            this.updateQuestTracker();
+            this.showNotification('Quest Complete!');
+            this.sfx.play('questComplete');
+          }
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Add time-aware greeting and dialogue variety for non-quest dialogue
+    let finalLines = lines;
+    if (!quest || quest.state === 'completed') {
+      finalLines = this._getVariedDialogue(nearestNPC, lines);
+    }
+
+    this.showDialogue(finalLines, () => {
       if (quest) {
         if (quest.state === 'available') {
           this.questManager.acceptQuest(quest.id);
@@ -1306,161 +1614,22 @@ export class GameScene extends Phaser.Scene {
     this.questTrackerText.setText(line);
   }
 
-  openPauseMenu() {
-    if (this._pauseOpen) return;
-    this._pauseOpen = true;
-    this.physics.pause();
-
-    const w = this.cameras.main.width;
-    const h = this.cameras.main.height;
-    const cx = w / 2;
-    const cy = h / 2;
-
-    this._pauseContainer = this.add.container(0, 0)
-      .setScrollFactor(0).setDepth(20000);
-
-    // Dark overlay
-    const overlay = this.add.rectangle(cx, cy, w, h, 0x000000, 0.65);
-    this._pauseContainer.add(overlay);
-
-    // Panel background
-    const panelW = w - 40;
-    const panelH = h - 30;
-    const panel = this.add.nineslice(
-      cx, cy, 'ui-frames', 'panel-gray',
-      panelW, panelH, 8, 8, 8, 8
-    );
-    this._pauseContainer.add(panel);
-
-    // Title
-    const title = this.add.text(cx, cy - panelH / 2 + 12, 'PAUSED', {
-      fontSize: '12px', fontFamily: 'CuteFantasy', color: '#3d2510',
-    }).setOrigin(0.5);
-    this._pauseContainer.add(title);
-
-    // Quest section
-    const active = this.questManager.getActiveQuests();
-    let yPos = cy - panelH / 2 + 30;
-
-    if (active.length > 0) {
-      const questHeader = this.add.text(cx, yPos, '-- Quests --', {
-        fontSize: '9px', fontFamily: 'CuteFantasy', color: '#5c3a1e',
-      }).setOrigin(0.5);
-      this._pauseContainer.add(questHeader);
-      yPos += 14;
-
-      this._pauseQuestIds = [];
-      const maxShown = Math.min(active.length, this.itemKeys.length);
-      active.slice(0, maxShown).forEach((q, i) => {
-        const isTracked = q.id === this.trackedQuestId;
-        const marker = isTracked ? '>' : ' ';
-        const statusStr = q.state === 'ready' ? ' [DONE!]' : `: ${q.progress}/${q.objective.count}`;
-
-        const qText = this.add.text(38, yPos, `${marker} ${i + 1}: ${q.name}${statusStr}`, {
-          fontSize: '9px', fontFamily: 'CuteFantasy',
-          color: isTracked ? '#2a1a08' : '#7a6a5a',
-        });
-        this._pauseContainer.add(qText);
-        this._pauseQuestIds.push(q.id);
-        yPos += 12;
-      });
-
-      const trackHint = this.add.text(cx, yPos + 4, 'Press 1-' + maxShown + ' to track quest', {
-        fontSize: '8px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
-      }).setOrigin(0.5);
-      this._pauseContainer.add(trackHint);
-      yPos += 18;
-    }
-
-    // Completed quests count
-    const allQuests = this.questManager.getAllQuests();
-    const completed = allQuests.filter(q => q.state === 'completed');
-    if (completed.length > 0) {
-      const compText = this.add.text(cx, yPos, `Completed: ${completed.length} quest${completed.length > 1 ? 's' : ''}`, {
-        fontSize: '8px', fontFamily: 'CuteFantasy', color: '#2d7a2d',
-      }).setOrigin(0.5);
-      this._pauseContainer.add(compText);
-      yPos += 16;
-    }
-
-    // Divider
-    const divider = this.add.rectangle(cx, yPos, panelW - 20, 1, 0x8b6d4a);
-    this._pauseContainer.add(divider);
-    yPos += 12;
-
-    // Options
-    const resumeText = this.add.text(cx, yPos, 'ESC / ENTER: Resume', {
-      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#2a1a08',
-    }).setOrigin(0.5);
-    this._pauseContainer.add(resumeText);
-    yPos += 14;
-
-    const saveText = this.add.text(cx, yPos, 'S: Save & Quit to Title', {
-      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#7a6a5a',
-    }).setOrigin(0.5);
-    this._pauseContainer.add(saveText);
-
-    // Pulse resume text
-    this.tweens.add({
-      targets: resumeText,
-      alpha: { from: 1, to: 0.4 },
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-    });
-
-  }
-
-  closePauseMenu() {
-    if (!this._pauseOpen) return;
-    this._pauseOpen = false;
-    this.physics.resume();
-
-    if (this._pauseContainer) {
-      this._pauseContainer.destroy();
-      this._pauseContainer = null;
-    }
-    this._pauseQuestIds = null;
-  }
-
-  _handlePauseInput() {
-    // Close with ESC or ENTER or E
-    if (Phaser.Input.Keyboard.JustDown(this.escKey) ||
-        Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-      this.closePauseMenu();
-      return;
-    }
-
-    // Save & quit (S key - reuse player's WASD down key)
-    if (Phaser.Input.Keyboard.JustDown(this.player.wasd.down)) {
-      SaveManager.save(this);
-      this.closePauseMenu();
-      this.scene.stop('UI');
-      this.scene.start('Title');
-      return;
-    }
-
-    // Quest tracking selection (reuse item keys 1-3)
-    if (this._pauseQuestIds) {
-      for (let i = 0; i < this._pauseQuestIds.length; i++) {
-        if (i < this.itemKeys.length && Phaser.Input.Keyboard.JustDown(this.itemKeys[i])) {
-          this.trackedQuestId = this._pauseQuestIds[i];
-          this.updateQuestTracker();
-          // Rebuild pause menu to reflect new selection
-          this.closePauseMenu();
-          this.openPauseMenu();
-          return;
-        }
-      }
-    }
+  _doSaveAndQuit() {
+    this.sfx.play('select');
+    SaveManager.save(this);
+    this.gameMenu.close();
+    this.scene.stop('UI');
+    this.scene.start('Title');
   }
 
   checkVictory() {
     const cave = this.questManager.getQuest('clear_cave');
     const temple = this.questManager.getQuest('clear_temple');
+    const forest = this.questManager.getQuest('clear_forest');
     const caveDone = cave && (cave.state === 'completed' || cave.state === 'ready');
     const templeDone = temple && (temple.state === 'completed' || temple.state === 'ready');
-    if (caveDone && templeDone) {
+    const forestDone = forest && (forest.state === 'completed' || forest.state === 'ready');
+    if (caveDone && templeDone && forestDone) {
       // Both bosses defeated - trigger victory after delay
       this.time.delayedCall(3000, () => {
         const questsCompleted = this.questManager.getAllQuests()
@@ -1479,29 +1648,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   showNotification(msg) {
-    const w = this.cameras.main.width;
+    // Add to UIScene so it renders over the HUD bar (full 320x240 viewport)
+    const ui = this.scene.get('UI');
+    const target = ui || this;
+    const w = 320;
 
-    // Panel background for notification
-    const textMeasure = msg.length * 4 + 20;
-    const panelW = Math.min(Math.max(textMeasure, 60), w - 20);
-    const panel = this.add.nineslice(
-      w / 2, 30, 'ui-frames', 'panel-orange',
-      panelW, 18, 6, 6, 6, 6
-    ).setScrollFactor(0).setDepth(9998);
-
-    const notif = this.add.text(w / 2, 30, msg, {
-      fontSize: '9px',
-      fontFamily: 'CuteFantasy',
-      color: '#3d2510',
+    const notif = target.add.text(w / 2, 20, msg, {
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
 
-    this.tweens.add({
-      targets: [notif, panel],
+    target.tweens.add({
+      targets: notif,
       alpha: 0,
       y: '-=10',
       duration: 2500,
       ease: 'Power2',
-      onComplete: () => { notif.destroy(); panel.destroy(); },
+      onComplete: () => { notif.destroy(); },
     });
   }
 
@@ -1515,6 +1681,130 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(100, () => SaveManager.save(this));
   }
 
+  // --- Quest variety: escort, timed, fetch ---
+
+  _spawnFetchItems() {
+    const axeQuest = this.questManager.getQuest('lost_axe');
+    if (axeQuest && axeQuest.state === 'active' && this.mapData.name === 'forest_dungeon') {
+      const obj = axeQuest.objective;
+      const item = this.add.rectangle(obj.fetchX, obj.fetchY, 8, 8, 0xffaa00);
+      item.setDepth(9000);
+      // Sparkle effect
+      this.tweens.add({
+        targets: item, alpha: 0.5, duration: 500, yoyo: true, repeat: -1,
+      });
+      const label = this.add.text(obj.fetchX, obj.fetchY - 10, 'Axe', {
+        fontSize: '8px', fontFamily: 'Arial, sans-serif',
+        color: '#ffdd00', stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(9001);
+      // Physics zone for pickup
+      const zone = this.add.zone(obj.fetchX, obj.fetchY, 16, 16);
+      this.physics.add.existing(zone, true);
+      this.physics.add.overlap(this.player, zone, () => {
+        if (item._collected) return;
+        item._collected = true;
+        axeQuest.progress = axeQuest.objective.count;
+        axeQuest.state = 'ready';
+        this.updateQuestTracker();
+        this.showNotification('Found the Lost Axe!');
+        this.sfx.play('itemPickup');
+        item.destroy();
+        label.destroy();
+        zone.destroy();
+      });
+    }
+  }
+
+  _startEscort(npcId) {
+    // Find the NPC and make them follow the player
+    this.npcs.getChildren().forEach((npc) => {
+      if (npc.npcId === npcId) {
+        this._escortNPC = npc;
+        this._escortActive = true;
+        npc._isEscorted = true;
+      }
+    });
+  }
+
+  _updateEscort(delta) {
+    if (!this._escortActive || !this._escortNPC || !this._escortNPC.active) {
+      this._escortActive = false;
+      return;
+    }
+
+    const npc = this._escortNPC;
+    const player = this.player;
+    const dist = Phaser.Math.Distance.Between(npc.x, npc.y, player.x, player.y);
+
+    // Follow player if too far
+    if (dist > 30) {
+      const angle = Phaser.Math.Angle.Between(npc.x, npc.y, player.x, player.y);
+      npc.body.setVelocity(Math.cos(angle) * 35, Math.sin(angle) * 35);
+    } else {
+      npc.body.setVelocity(0, 0);
+    }
+
+    // Check if reached destination
+    const quest = this.questManager.getQuest('escort_chloe');
+    if (quest && quest.state === 'active') {
+      const dest = quest.objective.destination;
+      const distDest = Phaser.Math.Distance.Between(npc.x, npc.y, dest.x, dest.y);
+      if (distDest < 30) {
+        quest.progress = quest.objective.count;
+        quest.state = 'ready';
+        this._escortActive = false;
+        npc._isEscorted = false;
+        this.updateQuestTracker();
+        this.showNotification('Chloe reached the inn!');
+        this.sfx.play('questComplete');
+      }
+    }
+  }
+
+  _startTimedQuest(questId, timeLimit) {
+    this._timedQuestId = questId;
+    this._timedRemaining = timeLimit * 1000; // convert to ms
+    // Create timer display
+    if (!this._timedText) {
+      this._timedText = this.add.text(this.cameras.main.width / 2, 14, '', {
+        fontSize: '12px', fontFamily: 'Arial, sans-serif',
+        color: '#ff4444', stroke: '#000000', strokeThickness: 3,
+        fontStyle: 'bold',
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(9500);
+    }
+  }
+
+  _updateTimedQuest(delta) {
+    if (!this._timedQuestId) return;
+
+    const quest = this.questManager.getQuest(this._timedQuestId);
+    if (!quest || quest.state !== 'active') {
+      // Quest completed or no longer active
+      this._timedQuestId = null;
+      if (this._timedText) { this._timedText.destroy(); this._timedText = null; }
+      return;
+    }
+
+    this._timedRemaining -= delta;
+    const secs = Math.max(0, Math.ceil(this._timedRemaining / 1000));
+
+    if (this._timedText) {
+      this._timedText.setText(`Time: ${secs}s`);
+      this._timedText.setColor(secs <= 15 ? '#ff0000' : '#ff4444');
+    }
+
+    if (this._timedRemaining <= 0) {
+      // Time's up — fail the quest
+      quest.state = 'available';
+      quest.progress = 0;
+      this._timedQuestId = null;
+      if (this._timedText) { this._timedText.destroy(); this._timedText = null; }
+      this.updateQuestTracker();
+      this.showNotification('Time\'s up! Quest failed.');
+      this.sfx.play('playerHurt');
+    }
+  }
+
   // --- Gold & XP ---
   addGold(amount) {
     this.gold += amount;
@@ -1525,6 +1815,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   addXP(amount) {
+    if (amount > 0) {
+      this.showFloatingText(this.player.x, this.player.y - 20, `+${amount} XP`, '#44bb44');
+    }
     this.xp += amount;
     while (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
@@ -1545,7 +1838,38 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.showNotification(`Level Up! Lv.${this.level}${bonusMsg}`);
-      this.sfx.play('questComplete');
+      this.sfx.play('levelUp');
+
+      // Level-up effects: camera zoom pulse
+      this.cameras.main.zoomTo(1.05, 250, 'Sine.easeOut', false, (cam, progress) => {
+        if (progress === 1) this.cameras.main.zoomTo(1, 250, 'Sine.easeIn');
+      });
+
+      // White flash overlay
+      const flash = this.add.rectangle(
+        this.cameras.main.width / 2, this.cameras.main.height / 2,
+        this.cameras.main.width, this.cameras.main.height,
+        0xffffff, 0.3
+      ).setScrollFactor(0).setDepth(9998);
+      this.tweens.add({
+        targets: flash, alpha: 0, duration: 400,
+        onComplete: () => flash.destroy(),
+      });
+
+      // Golden sparkle particles radiating from player
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const sparkle = this.add.circle(this.player.x, this.player.y, 2, 0xffdd00, 0.9);
+        sparkle.setDepth(9999);
+        this.tweens.add({
+          targets: sparkle,
+          x: this.player.x + Math.cos(angle) * 28,
+          y: this.player.y + Math.sin(angle) * 28,
+          alpha: 0, scale: 0.3,
+          duration: 500, ease: 'Power2',
+          onComplete: () => sparkle.destroy(),
+        });
+      }
     }
     this.events.emit('xp-changed', this.xp, this.xpToNext, this.level);
   }
@@ -1715,7 +2039,7 @@ export class GameScene extends Phaser.Scene {
     this.shopContainer.add(bg);
 
     const title = this.add.text(boxX, boxY - boxH / 2 + 6, `${npc.npcName}'s Shop  (Gold: ${this.gold})`, {
-      fontSize: '9px', fontFamily: 'CuteFantasy', color: '#3d2510',
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#3d2510',
     }).setOrigin(0.5, 0);
     this.shopContainer.add(title);
 
@@ -1724,10 +2048,10 @@ export class GameScene extends Phaser.Scene {
       const prefix = i < 9 ? `${i + 1}` : '*';
       const suffix = item.desc ? ` (${item.desc})` : '';
       const label = this.add.text(20, y, `${prefix}: ${item.name}${suffix}`, {
-        fontSize: '8px', fontFamily: 'CuteFantasy', color: '#2a1a08',
+        fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#2a1a08',
       }).setScrollFactor(0);
       const price = this.add.text(w - 20, y, `${item.price}g`, {
-        fontSize: '8px', fontFamily: 'CuteFantasy',
+        fontSize: '12px', fontFamily: 'Arial, sans-serif',
         color: this.gold >= item.price ? '#2a1a08' : '#999999',
       }).setOrigin(1, 0).setScrollFactor(0);
       this.shopContainer.add(label);
@@ -1735,7 +2059,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     const hint = this.add.text(boxX, boxY + boxH / 2 - 6, 'ESC to close', {
-      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#8b6d4a',
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#8b6d4a',
     }).setOrigin(0.5, 1).setScrollFactor(0);
     this.shopContainer.add(hint);
 
@@ -1764,6 +2088,7 @@ export class GameScene extends Phaser.Scene {
   handleShopBuy(index) {
     const item = this._shopItems[index];
     if (!item) return;
+    this.sfx.play('select');
     if (this.gold < item.price) {
       this.showNotification('Not enough gold!');
       return;
@@ -1833,16 +2158,80 @@ export class GameScene extends Phaser.Scene {
       [`Welcome! Rest for ${cost} gold?\nYou look like you need it!`, 'Sweet dreams...'],
       () => {
         this.addGold(-cost);
-        this.player.health = this.player.maxHealth;
-        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
-        this.showNotification('Fully rested!');
-        this.sfx.play('potionUse');
+        // Fade to black rest visual
+        const cam = this.cameras.main;
+        const restOverlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0)
+          .setScrollFactor(0).setDepth(12000);
+        const restText = this.add.text(cam.width / 2, cam.height / 2, 'Resting...', {
+          fontSize: '14px', fontFamily: 'Arial, sans-serif', color: '#ffffff',
+          fontStyle: 'bold',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(12001).setAlpha(0);
+
+        this.tweens.add({
+          targets: restOverlay, alpha: 1, duration: 300,
+          onComplete: () => {
+            this.tweens.add({ targets: restText, alpha: 1, duration: 200 });
+            this.time.delayedCall(500, () => {
+              // Heal during hold
+              this.player.health = this.player.maxHealth;
+              this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+              this.sfx.play('potionUse');
+              this.tweens.add({
+                targets: [restOverlay, restText], alpha: 0, duration: 300,
+                onComplete: () => {
+                  restOverlay.destroy();
+                  restText.destroy();
+                  this.showNotification('Fully rested!');
+                },
+              });
+            });
+          },
+        });
       }, name, portrait
     );
   }
 
   _castMagic() {
-    this.player.mana -= this.player.magicCost;
+    const spell = this.spells[this.currentSpellIndex];
+    if (!spell || this.level < spell.minLevel) return;
+    if (this.player.mana < spell.manaCost) return;
+
+    // Heal spell
+    if (spell.isHeal) {
+      if (this._healCooldown > 0) return;
+      if (this.player.health >= this.player.maxHealth) {
+        this.sfx.play('menuCancel');
+        this.showNotification('Already full HP!');
+        return;
+      }
+      this.player.mana -= spell.manaCost;
+      this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+      this._healCooldown = spell.cooldown;
+      const healed = Math.min(spell.healAmount, this.player.maxHealth - this.player.health);
+      if (healed > 0) {
+        this.player.health += healed;
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      }
+      this.sfx.play('heal');
+      this.showNotification(`+${healed} HP`);
+      // Green healing particles
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const p = this.add.circle(this.player.x, this.player.y, 2, 0x44ff44, 0.8);
+        p.setDepth(9999);
+        this.tweens.add({
+          targets: p,
+          x: this.player.x + Math.cos(angle) * 16,
+          y: this.player.y + Math.sin(angle) * 16 - 8,
+          alpha: 0, duration: 400,
+          onComplete: () => p.destroy(),
+        });
+      }
+      return;
+    }
+
+    // Projectile spells (Fireball / Ice Bolt)
+    this.player.mana -= spell.manaCost;
     this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
 
     const dirs = {
@@ -1853,36 +2242,37 @@ export class GameScene extends Phaser.Scene {
     };
     const d = dirs[this.player.direction];
     const speed = 140;
+    const color = spell.color;
 
     // Create magic projectile
-    const proj = this.add.circle(this.player.x + d.x * 12, this.player.y + d.y * 12, 4, 0x4488ff, 0.9);
-    proj.setDepth(9999);
-    this.physics.add.existing(proj, false);
-    proj.body.setVelocity(d.x * speed, d.y * speed);
-    proj.body.setAllowGravity(false);
-    proj.damage = 2;
+    const projShape = spell.slow
+      ? this.add.rectangle(this.player.x + d.x * 12, this.player.y + d.y * 12, 6, 6, color, 0.9)
+      : this.add.circle(this.player.x + d.x * 12, this.player.y + d.y * 12, 4, color, 0.9);
+    projShape.setDepth(9999);
+    this.physics.add.existing(projShape, false);
+    projShape.body.setVelocity(d.x * speed, d.y * speed);
+    projShape.body.setAllowGravity(false);
+    projShape.damage = spell.damage;
+    projShape.slow = spell.slow || false;
+    if (spell.slow) projShape.setRotation(Math.PI / 4); // diamond shape
 
     // Glow trail
-    const glow = this.add.circle(proj.x, proj.y, 6, 0x4488ff, 0.3);
+    const glow = this.add.circle(projShape.x, projShape.y, 6, color, 0.3);
     glow.setDepth(9998);
 
     // SFX
-    this.sfx.play('swordSwing');
+    this.sfx.play(spell.slow ? 'icebolt' : 'fireball');
 
     // Update glow position
     const trailTimer = this.time.addEvent({
       delay: 16,
       callback: () => {
-        if (!proj.active) { glow.destroy(); trailTimer.remove(); return; }
-        glow.setPosition(proj.x, proj.y);
-        // Trail particle
-        const trail = this.add.circle(proj.x, proj.y, 2, 0x4488ff, 0.4);
+        if (!projShape.active) { glow.destroy(); trailTimer.remove(); return; }
+        glow.setPosition(projShape.x, projShape.y);
+        const trail = this.add.circle(projShape.x, projShape.y, 2, color, 0.4);
         trail.setDepth(9997);
         this.tweens.add({
-          targets: trail,
-          alpha: 0,
-          scale: 0,
-          duration: 200,
+          targets: trail, alpha: 0, scale: 0, duration: 200,
           onComplete: () => trail.destroy(),
         });
       },
@@ -1890,23 +2280,37 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Enemy collision
-    this.physics.add.overlap(proj, this.enemies, (p, enemy) => {
+    this.physics.add.overlap(projShape, this.enemies, (p, enemy) => {
       if (!enemy.takeDamage || enemy.health <= 0) return;
       enemy.takeDamage(p.damage, this.player.x, this.player.y);
       this.sfx.play('hit');
-      this.showDamageNumber(enemy.x, enemy.y - 8, p.damage);
+      this.showDamageNumber(enemy.x, enemy.y - 8, p.damage, 'magic');
+
+      // Ice slow effect
+      if (p.slow && enemy.speed && !enemy._slowed) {
+        enemy._slowed = true;
+        const origSpeed = enemy.speed;
+        enemy.speed = Math.round(origSpeed * 0.4);
+        enemy.setTint(0x88ccff);
+        this.time.delayedCall(1000, () => {
+          if (enemy.active) {
+            enemy.speed = origSpeed;
+            enemy._slowed = false;
+            enemy.clearTint();
+          }
+        });
+      }
 
       // Impact burst
       for (let i = 0; i < 4; i++) {
         const angle = (i / 4) * Math.PI * 2;
-        const spark = this.add.circle(p.x, p.y, 2, 0x88bbff, 0.8);
+        const spark = this.add.circle(p.x, p.y, 2, color, 0.8);
         spark.setDepth(9999);
         this.tweens.add({
           targets: spark,
           x: p.x + Math.cos(angle) * 10,
           y: p.y + Math.sin(angle) * 10,
-          alpha: 0,
-          duration: 150,
+          alpha: 0, duration: 150,
           onComplete: () => spark.destroy(),
         });
       }
@@ -1928,15 +2332,19 @@ export class GameScene extends Phaser.Scene {
         const reward = rewards[enemy.enemyType] || { gold: 3, xp: 10 };
         this.addGold(reward.gold);
         this.addXP(reward.xp);
+        // Track bestiary
+        if (enemy.enemyType && this.bestiary) {
+          this.bestiary[enemy.enemyType] = (this.bestiary[enemy.enemyType] || 0) + 1;
+        }
       }
     });
 
-    // Destroy after distance
-    this.time.delayedCall(800, () => {
-      if (proj.active) {
+    // Destroy after lifetime
+    this.time.delayedCall(spell.lifetime, () => {
+      if (projShape.active) {
         glow.destroy();
         trailTimer.remove();
-        proj.destroy();
+        projShape.destroy();
       }
     });
   }
@@ -1961,8 +2369,20 @@ export class GameScene extends Phaser.Scene {
     const px = this.player.x;
     const py = this.player.y;
 
-    // Paul appears with a flash
-    this.time.delayedCall(400, () => {
+    // Death animation: red tint + screen flash
+    this.player.setTint(0xff4444);
+    const deathFlash = this.add.rectangle(
+      this.cameras.main.width / 2, this.cameras.main.height / 2,
+      this.cameras.main.width, this.cameras.main.height,
+      0xffffff, 0.6
+    ).setScrollFactor(0).setDepth(9998);
+    this.tweens.add({
+      targets: deathFlash, alpha: 0, duration: 300,
+      onComplete: () => deathFlash.destroy(),
+    });
+
+    // Paul appears with a flash (after death animation delay)
+    this.time.delayedCall(900, () => {
       this.sfx.play('wizardTeleport');
 
       // Magic flash
@@ -1980,6 +2400,21 @@ export class GameScene extends Phaser.Scene {
       this._paulSprite = this.add.sprite(px + 20, py, 'miner-mike', 0);
       this._paulSprite.setTint(0x9966ff);
       this._paulSprite.setDepth(10001);
+
+      // Wizard hat (purple triangle + brim) — sits on Paul's head
+      const hatX = px + 20;
+      const hatY = py - 14;
+      this._paulHat = this.add.graphics();
+      this._paulHat.setDepth(10002);
+      // Hat brim (drawn first, behind cone)
+      this._paulHat.fillStyle(0x5522aa);
+      this._paulHat.fillEllipse(hatX, hatY + 2, 20, 5);
+      // Hat cone
+      this._paulHat.fillStyle(0x6633cc);
+      this._paulHat.fillTriangle(hatX, hatY - 12, hatX - 7, hatY + 1, hatX + 7, hatY + 1);
+      // Star on hat
+      this._paulHat.fillStyle(0xffdd00);
+      this._paulHat.fillCircle(hatX, hatY - 4, 1.5);
 
       // Shield bubble around Lizzy
       const shield = this.add.circle(px, py, 12, 0x8844ff, 0.3);
@@ -2000,10 +2435,10 @@ export class GameScene extends Phaser.Scene {
         const dialogBg = this.add.rectangle(cam.width / 2, cam.height / 2 - 20, cam.width - 24, 28, 0x1a1a2e, 0.95)
           .setScrollFactor(0).setDepth(11000).setStrokeStyle(1, 0x8844ff);
         const dialogName = this.add.text(16, cam.height / 2 - 30, 'Paul the Wizard', {
-          fontSize: '8px', fontFamily: 'CuteFantasy', color: '#aa88ff', fontStyle: 'bold',
+          fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#aa88ff', fontStyle: 'bold',
         }).setScrollFactor(0).setDepth(11001);
         const dialogText = this.add.text(16, cam.height / 2 - 20, 'Not so fast, Lizzy! I\'ve got you covered!', {
-          fontSize: '9px', fontFamily: 'CuteFantasy', color: '#ffffff',
+          fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#ffffff',
           wordWrap: { width: cam.width - 40 },
         }).setScrollFactor(0).setDepth(11001);
 
@@ -2034,6 +2469,7 @@ export class GameScene extends Phaser.Scene {
           // Fade to white
           this.cameras.main.fadeOut(600, 255, 255, 255);
           this.cameras.main.once('camerafadeoutcomplete', () => {
+            if (this._paulHat) { this._paulHat.destroy(); this._paulHat = null; }
             if (this._paulSprite) { this._paulSprite.destroy(); this._paulSprite = null; }
 
             // Restart at overworld with full health
@@ -2049,6 +2485,12 @@ export class GameScene extends Phaser.Scene {
               inventory: this.inventory.saveState(),
               dayTime: this.dayTime,
               equipment: this.equipment.saveState(),
+              openedChests: this._getOpenedChests(),
+              trackedQuestId: this.trackedQuestId,
+              bestiary: this.bestiary,
+              timedQuestId: this._timedQuestId,
+              timedRemaining: this._timedRemaining,
+              tutorialShown: this.tutorialShown,
               paulRescued: true, // flag for notification
             });
           });
@@ -2235,20 +2677,31 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  showDamageNumber(x, y, amount) {
+  showDamageNumber(x, y, amount, type = 'normal') {
+    // Color by type: gold for high damage, blue for magic, red default
+    let color = '#ff4444';
+    let scale = 1;
+    if (type === 'magic') {
+      color = '#88bbff';
+    } else if (amount > 1) {
+      color = '#ffdd00';
+      scale = 1.3;
+    }
+
     const text = this.add.text(x + (Math.random() - 0.5) * 8, y, `-${amount}`, {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
-      color: '#ff4444',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
+      color: color,
       stroke: '#000000',
       strokeThickness: 2,
       fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(9999);
+    }).setOrigin(0.5).setDepth(9999).setScale(scale);
 
     this.tweens.add({
       targets: text,
       y: y - 24,
       alpha: 0,
+      scale: scale * 0.5,
       duration: 600,
       ease: 'Power2',
       onComplete: () => text.destroy(),
@@ -2257,8 +2710,8 @@ export class GameScene extends Phaser.Scene {
 
   showFloatingText(x, y, msg, color) {
     const text = this.add.text(x + (Math.random() - 0.5) * 6, y, msg, {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: color,
       stroke: '#000000',
       strokeThickness: 2,
@@ -2282,100 +2735,6 @@ export class GameScene extends Phaser.Scene {
       this.physics.world.resume();
       this._inHitFreeze = false;
     });
-  }
-
-  // --- Minimap ---
-  _setupMinimap() {
-    const cam = this.cameras.main;
-    const mmW = 48;
-    const mmH = 36;
-    const mmX = cam.width - mmW - 4;
-    const mmY = cam.height - mmH - 10;
-
-    // Background frame
-    this.minimapBg = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW + 2, mmH + 2, 0x000000, 0.6)
-      .setScrollFactor(0).setDepth(8500);
-    this.minimapBorder = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW + 2, mmH + 2)
-      .setScrollFactor(0).setDepth(8501).setStrokeStyle(1, 0x666666).setFillStyle(0, 0);
-
-    this.minimapGfx = this.add.graphics().setScrollFactor(0).setDepth(8502);
-
-    // Static background: green, pond, desert, forest
-    this.minimapStaticGfx = this.add.graphics().setScrollFactor(0).setDepth(8501);
-    const g = this.minimapStaticGfx;
-    g.fillStyle(0x4a8c3f);
-    g.fillRect(mmX, mmY, mmW, mmH);
-
-    // Desert zone
-    const biomes = this.mapData.biomes || [];
-    for (const b of biomes) {
-      const bx = mmX + (b.x1 / this.mapData.width) * mmW;
-      const by = mmY + (b.y1 / this.mapData.height) * mmH;
-      const bw = ((b.x2 - b.x1) / this.mapData.width) * mmW;
-      const bh = ((b.y2 - b.y1) / this.mapData.height) * mmH;
-      if (b.type === 'desert') {
-        g.fillStyle(0xccbb77);
-        g.fillRect(bx, by, bw, bh);
-      } else if (b.type === 'forest') {
-        g.fillStyle(0x2d5a1e);
-        g.fillRect(bx, by, bw, bh);
-      }
-    }
-
-    // Pond
-    g.fillStyle(0x4488cc);
-    const pondMX = mmX + (560 / this.worldWidth) * mmW;
-    const pondMY = mmY + (288 / this.worldHeight) * mmH;
-    g.fillEllipse(pondMX, pondMY, 4, 3);
-
-    // Houses
-    g.fillStyle(0x8b5e3c);
-    for (const obj of (this.mapData.objects || [])) {
-      if (obj.type === 'house-wood') {
-        const hx = mmX + (obj.x / this.worldWidth) * mmW;
-        const hy = mmY + (obj.y / this.worldHeight) * mmH;
-        g.fillRect(hx - 2, hy - 1, 4, 3);
-      }
-    }
-
-    // Player dot
-    this.minimapPlayerDot = this.add.circle(0, 0, 1.5, 0xff4444)
-      .setScrollFactor(0).setDepth(8504);
-
-    this._mmX = mmX;
-    this._mmY = mmY;
-    this._mmW = mmW;
-    this._mmH = mmH;
-  }
-
-  _updateMinimap() {
-    if (!this.minimap && !this.minimapGfx) return;
-
-    const gfx = this.minimapGfx;
-    gfx.clear();
-
-    // Enemy dots (red)
-    gfx.fillStyle(0xff6666);
-    this.enemies.getChildren().forEach(e => {
-      if (e.health > 0) {
-        const ex = this._mmX + (e.x / this.worldWidth) * this._mmW;
-        const ey = this._mmY + (e.y / this.worldHeight) * this._mmH;
-        gfx.fillCircle(ex, ey, 1);
-      }
-    });
-
-    // NPC dots (yellow)
-    gfx.fillStyle(0xffff44);
-    this.npcs.getChildren().forEach(n => {
-      const nx = this._mmX + (n.x / this.worldWidth) * this._mmW;
-      const ny = this._mmY + (n.y / this.worldHeight) * this._mmH;
-      gfx.fillCircle(nx, ny, 1);
-    });
-
-    // Player dot position
-    const px = this._mmX + (this.player.x / this.worldWidth) * this._mmW;
-    const py = this._mmY + (this.player.y / this.worldHeight) * this._mmH;
-    this.minimapPlayerDot.setPosition(px, py);
   }
 
   // --- Environmental decoration ---
@@ -2500,8 +2859,17 @@ export class GameScene extends Phaser.Scene {
     this.add.rectangle(caveX, caveY, 28, 20, 0x3a2a1a).setDepth(caveY - 1);
     this.add.rectangle(caveX, caveY - 10, 30, 6, 0x555544).setDepth(caveY);
     this.add.text(caveX, caveY - 18, 'CAVE', {
-      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#888866',
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#888866',
     }).setOrigin(0.5).setDepth(caveY + 1);
+
+    // Forest dungeon entrance
+    const forestX = 80;
+    const forestY = 420;
+    this.add.rectangle(forestX, forestY, 28, 20, 0x224422).setDepth(forestY - 1);
+    this.add.rectangle(forestX, forestY - 10, 30, 6, 0x335533).setDepth(forestY);
+    this.add.text(forestX, forestY - 18, 'FOREST', {
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#668866',
+    }).setOrigin(0.5).setDepth(forestY + 1);
 
     // Rocks
     const rocks = [
@@ -2521,32 +2889,148 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  _getVariedDialogue(npc, defaultLines) {
+    const npcDialogues = {
+      farmer_bob: [
+        'These crops won\'t tend themselves!',
+        'Watch out for skeletons in the fields.',
+        'I heard strange sounds from the cave...',
+      ],
+      miner_mike: [
+        'The mines are getting dangerous.',
+        'I found some gold ore yesterday!',
+        'Be careful in the caves, adventurer.',
+      ],
+      fisherman_fin: [
+        'The fish are biting today!',
+        'There\'s something big in the deep water...',
+        'A good day for fishing!',
+      ],
+      chef_chloe: [
+        'I\'ve been cooking all day!',
+        'The inn needs fresh supplies.',
+        'Have you tried the stew?',
+      ],
+      ranger_reed: [
+        'The forest grows more dangerous...',
+        'I\'ve seen orc tracks near the entrance.',
+        'Stay sharp out there!',
+      ],
+      lumberjack_jack: [
+        'These trees are ancient...',
+        'I lost my axe somewhere in the dungeon.',
+        'The forest hides many secrets.',
+      ],
+    };
+
+    const extraLines = npcDialogues[npc.npcId];
+    if (!extraLines) return defaultLines;
+
+    // Track dialogue index per NPC
+    if (!npc._dialogueIndex) npc._dialogueIndex = 0;
+    npc._dialogueIndex++;
+
+    // Time-aware greeting
+    let greeting = '';
+    if (this.dayTime < 0.3) greeting = 'Good morning! ';
+    else if (this.dayTime > 0.7) greeting = 'Good evening! ';
+    else greeting = 'Hello! ';
+
+    const lineIndex = (npc._dialogueIndex - 1) % extraLines.length;
+    return [greeting + extraLines[lineIndex]];
+  }
+
+  _handleBookshelf() {
+    const loreLines = [
+      'The ancient texts speak of three great evils sealed in dungeons beneath the land...',
+      'Long ago, a wizard named Paul watched over these lands. His magic keeps the balance.',
+      'Legends tell of a warrior who will rise to vanquish darkness and restore peace.',
+    ];
+    // Check if player is near any bookshelf obstacle
+    let found = false;
+    this.obstacles.getChildren().forEach((zone) => {
+      if (!zone.bookshelf) return;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, zone.x, zone.y);
+      if (d < 30 && !found) {
+        found = true;
+        const line = loreLines[Math.floor(Math.random() * loreLines.length)];
+        this.showDialogue([line], null, 'Book');
+      }
+    });
+    return found;
+  }
+
+  _showTutorial() {
+    this.physics.pause();
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+
+    const container = this.add.container(0, 0).setScrollFactor(0).setDepth(15000);
+    const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7);
+    container.add(overlay);
+
+    const title = this.add.text(w / 2, 20, 'CONTROLS', {
+      fontSize: '14px', fontFamily: 'Arial, sans-serif', color: '#ffdd00',
+      fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5);
+    container.add(title);
+
+    const controls = [
+      'WASD: Move',
+      'SPACE: Attack',
+      'E: Interact',
+      'F: Cast Spell',
+      'TAB: Cycle Spell',
+      'ESC: Menu',
+      'M: Map',
+    ];
+    const controlText = this.add.text(w / 2, 50, controls.join('\n'), {
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2, lineSpacing: 6, align: 'center',
+    }).setOrigin(0.5, 0);
+    container.add(controlText);
+
+    const prompt = this.add.text(w / 2, h - 16, 'Press any key to continue', {
+      fontSize: '10px', fontFamily: 'Arial, sans-serif', color: '#aaaaaa',
+    }).setOrigin(0.5);
+    container.add(prompt);
+    this.tweens.add({
+      targets: prompt, alpha: { from: 1, to: 0.3 },
+      duration: 600, yoyo: true, repeat: -1,
+    });
+
+    this.input.keyboard.once('keydown', () => {
+      container.destroy();
+      this.tutorialShown = true;
+      this.physics.resume();
+    });
+  }
+
   update(time, delta) {
     // Pause menu
-    if (this._pauseOpen) {
-      this._handlePauseInput();
+    // Game menu handles its own input when open
+    if (this.gameMenu.visible) return;
+
+    if (Phaser.Input.Keyboard.JustDown(this.escKey) && !this.inDialogue && !this._shopActive && !this.overlayOpen) {
+      this.sfx.play('select');
+      this.gameMenu.open(0); // Stats tab
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.escKey) && !this.inDialogue && !this._shopActive && !this.overlayOpen) {
-      this.openPauseMenu();
+    if (Phaser.Input.Keyboard.JustDown(this.questKey) && !this.inDialogue && !this._shopActive && !this.overlayOpen) {
+      this.sfx.play('select');
+      this.gameMenu.open(1); // Quests tab
       return;
     }
 
     // Handle overlay toggles
     if (Phaser.Input.Keyboard.JustDown(this.mapKey) && !this.inDialogue) {
-      if (this.questBook.visible) return;
       this.overlayOpen = this.mapOverlay.toggle(
         this.player.x, this.player.y,
         this.worldWidth, this.worldHeight,
-        this.isOverworld ? this.npcs : null
+        this.isOverworld ? this.npcs : null,
+        this.isOverworld ? this.questManager : null
       );
-      return;
-    }
-
-    if (Phaser.Input.Keyboard.JustDown(this.questKey) && !this.inDialogue) {
-      if (this.mapOverlay.visible) return;
-      this.overlayOpen = this.questBook.toggle(this.questManager);
       return;
     }
 
@@ -2600,9 +3084,39 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Spell cycling with Tab
+    if (Phaser.Input.Keyboard.JustDown(this.tabKey)) {
+      const available = this.spells.filter(s => this.level >= s.minLevel);
+      if (available.length > 1) {
+        this.currentSpellIndex = (this.currentSpellIndex + 1) % this.spells.length;
+        // Skip spells above player level
+        while (this.level < this.spells[this.currentSpellIndex].minLevel) {
+          this.currentSpellIndex = (this.currentSpellIndex + 1) % this.spells.length;
+        }
+        const spell = this.spells[this.currentSpellIndex];
+        this.showNotification(`Spell: ${spell.name}`);
+        this.sfx.play('select');
+        this.events.emit('spell-changed', this.currentSpellIndex, spell);
+      }
+    }
+
+    // Heal cooldown
+    if (this._healCooldown > 0) this._healCooldown -= delta;
+    if (this._spellCooldown > 0) this._spellCooldown -= delta;
+
     // Magic attack
-    if (Phaser.Input.Keyboard.JustDown(this.magicKey) && this.player.mana >= this.player.magicCost) {
-      this._castMagic();
+    const currentSpell = this.spells[this.currentSpellIndex];
+    if (Phaser.Input.Keyboard.JustDown(this.magicKey) && this._spellCooldown <= 0) {
+      if (currentSpell && this.player.mana >= currentSpell.manaCost && this.level >= currentSpell.minLevel) {
+        this._spellCooldown = 500;
+        this._castMagic();
+      } else if (currentSpell && this.level < currentSpell.minLevel) {
+        this.sfx.play('menuCancel');
+        this.showNotification(`Spell locked! (Lv.${currentSpell.minLevel} required)`);
+      } else if (currentSpell && this.player.mana < currentSpell.manaCost) {
+        this.sfx.play('menuCancel');
+        this.showNotification('Not enough mana!');
+      }
     }
 
     // NPC interaction / chest / fishing
@@ -2614,6 +3128,8 @@ export class GameScene extends Phaser.Scene {
         this.handleNPCInteraction();
       } else if (this.handleChestOpen()) {
         // Chest was opened
+      } else if (this._handleBookshelf()) {
+        // Bookshelf was read
       } else if (this._nearPond && this.isOverworld) {
         this.fishingGame.start();
       }
@@ -2621,10 +3137,16 @@ export class GameScene extends Phaser.Scene {
 
     // Update NPCs
     this.npcs.getChildren().forEach((npc) => {
-      if (npc.update) {
+      if (npc.update && !npc._isEscorted) {
         npc.update(time, delta, this.player, this.questManager, this.dayTime);
       }
     });
+
+    // Escort quest update
+    this._updateEscort(delta);
+
+    // Timed quest update
+    this._updateTimedQuest(delta);
 
     // Update enemies
     this.enemies.getChildren().forEach((enemy) => {
@@ -2641,7 +3163,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Update pet
-    if (this.pet) this.pet.update(time, delta, this.player);
+    if (this.pet) {
+      this.pet.update(time, delta, this.player);
+      this.pet.collectNearbyLoot(this);
+    }
 
     // Update chests
     this.chests.getChildren().forEach((c) => {
@@ -2669,11 +3194,14 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (!this.isNight && this._ghostsSpawned) {
         this._ghostsSpawned = false;
-        // Fade out and destroy ghosts at dawn
-        this.ghosts.getChildren().forEach((g) => {
+        // Fade out and destroy ghosts at dawn — remove from both groups
+        const ghostList = [...this.ghosts.getChildren()];
+        for (const g of ghostList) {
           if (g._destroyVisuals) g._destroyVisuals();
+          this.enemies.remove(g, true);
+          this.ghosts.remove(g, true);
           g.destroy();
-        });
+        }
       }
     }
 
@@ -2693,6 +3221,19 @@ export class GameScene extends Phaser.Scene {
           if (dist > 120) {
             if (spawn.type === 'skeleton') {
               this.spawnSkeleton(spawn.x, spawn.y);
+            } else if (spawn.type === 'goblin') {
+              this.spawnGoblin(spawn.x, spawn.y);
+            } else if (spawn.type === 'orc') {
+              this.spawnOrc(spawn.x, spawn.y);
+            } else if (spawn.type === 'bat') {
+              const bat = new Bat(this, spawn.x, spawn.y);
+              this.enemies.add(bat);
+            } else if (spawn.type === 'scorpion') {
+              this.spawnScorpion(spawn.x, spawn.y);
+            } else if (spawn.type === 'ghost') {
+              const ghost = new Ghost(this, spawn.x, spawn.y);
+              this.enemies.add(ghost);
+              this.ghosts.add(ghost);
             } else {
               this.spawnSlime(spawn.x, spawn.y);
             }
@@ -2762,9 +3303,71 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Update minimap
-    if (this.minimapGfx) {
-      this._updateMinimap();
+    // Ambient particles
+    this._ambientTimer = (this._ambientTimer || 0) - delta;
+    if (this._ambientTimer <= 0) {
+      const cam = this.cameras.main;
+      const cx = cam.scrollX + cam.width / 2;
+      const cy = cam.scrollY + cam.height / 2;
+
+      if (this.isOverworld && this.isNight) {
+        // Night fireflies: yellow-green dots with sine-wave drift
+        this._ambientTimer = 600;
+        const fx = cx + (Math.random() - 0.5) * cam.width;
+        const fy = cy + (Math.random() - 0.5) * cam.height;
+        const firefly = this.add.circle(fx, fy, 1.5, 0xccff44, 0);
+        firefly.setDepth(9990);
+        this.tweens.add({
+          targets: firefly,
+          alpha: { from: 0, to: 0.7 },
+          x: fx + (Math.random() - 0.5) * 20,
+          y: fy + Math.sin(Math.random() * Math.PI * 2) * 12,
+          duration: 1500, yoyo: true,
+          onComplete: () => firefly.destroy(),
+        });
+      } else if (this.isCave) {
+        // Cave dust: gray particles drifting down
+        this._ambientTimer = 800;
+        const dx = cx + (Math.random() - 0.5) * cam.width;
+        const dy = cy + (Math.random() - 0.5) * cam.height * 0.5;
+        const dust = this.add.circle(dx, dy, 1, 0x888888, 0.4);
+        dust.setDepth(9990);
+        this.tweens.add({
+          targets: dust,
+          y: dy + 20 + Math.random() * 15,
+          alpha: 0, duration: 2000,
+          onComplete: () => dust.destroy(),
+        });
+      } else if (this.isTemple) {
+        // Desert/temple sand: tan particles drifting horizontally
+        this._ambientTimer = 700;
+        const sx = cx - cam.width / 2;
+        const sy = cy + (Math.random() - 0.5) * cam.height;
+        const sand = this.add.circle(sx, sy, 1, 0xddbb77, 0.35);
+        sand.setDepth(9990);
+        this.tweens.add({
+          targets: sand,
+          x: sx + cam.width * 0.6,
+          y: sy + (Math.random() - 0.5) * 10,
+          alpha: 0, duration: 2500,
+          onComplete: () => sand.destroy(),
+        });
+      } else {
+        this._ambientTimer = 1000; // No particles for other maps
+      }
+    }
+
+    // Cave darkness update
+    if (this.darknessRT) {
+      const cam = this.cameras.main;
+      this.darknessRT.fill(0x000000, 0.92);
+      // Player screen position relative to camera viewport
+      const px = this.player.x - cam.scrollX;
+      const py = this.player.y - cam.scrollY;
+      // Light radius scales with mana (60-100px)
+      const manaRatio = this.player.mana / this.player.maxMana;
+      const lightScale = 0.6 + manaRatio * 0.4; // 0.6 to 1.0
+      this.darknessRT.erase('torch-light', px - 80 * lightScale, py - 80 * lightScale);
     }
 
     // Depth sort

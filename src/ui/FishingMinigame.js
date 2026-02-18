@@ -66,13 +66,13 @@ export class FishingMinigame {
 
     // Text
     const title = scene.add.text(cx, barY - 14, 'FISHING! Press SPACE', {
-      fontSize: '9px', fontFamily: 'CuteFantasy', color: '#88ccff',
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#88ccff',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.container.add(title);
 
     const fishLabel = scene.add.text(cx, barY + barH + 8, `${this.fish.name} spotted!`, {
-      fontSize: '8px', fontFamily: 'CuteFantasy', color: '#ffdd00',
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#ffdd00',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.container.add(fishLabel);
@@ -130,7 +130,7 @@ export class FishingMinigame {
   }
 
   _catchFail() {
-    this.scene.sfx.play('playerHurt');
+    this.scene.sfx.play('menuCancel');
     this.scene.showNotification('The fish got away...');
     this.scene.time.delayedCall(600, () => this.close());
   }

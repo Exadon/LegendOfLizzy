@@ -17,6 +17,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.idleAnim = config.idleAnim || 'skeleton-idle-down';
     this.knockbackResist = config.knockbackResist || false;
     this.enemyType = config.enemyType || 'unknown';
+    this.walkAnims = config.walkAnims || {
+      right: 'skeleton-walk-right',
+      down: 'skeleton-walk-down',
+      up: 'skeleton-walk-up',
+    };
 
     // AI state
     this.aiState = 'wander';
@@ -67,13 +72,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dy = player.y - this.y;
 
     if (Math.abs(dx) > Math.abs(dy)) {
-      this.play('skeleton-walk-right', true);
+      this.play(this.walkAnims.right, true);
       this.setFlipX(dx < 0);
     } else if (dy > 0) {
-      this.play('skeleton-walk-down', true);
+      this.play(this.walkAnims.down, true);
       this.setFlipX(false);
     } else {
-      this.play('skeleton-walk-up', true);
+      this.play(this.walkAnims.up, true);
       this.setFlipX(false);
     }
   }
@@ -101,7 +106,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (wx === 0 && wy === 0) {
       this.play(this.idleAnim, true);
     } else {
-      this.play('skeleton-walk-down', true);
+      this.play(this.walkAnims.down, true);
     }
   }
 
@@ -151,6 +156,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     this.health = 2;
     this.speed = 20;
     this.damage = 1;
+    this.enemyType = 'slime';
 
     this.wanderTimer = 0;
     this.wanderDirection = { x: 0, y: 0 };

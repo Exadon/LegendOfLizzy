@@ -36,20 +36,20 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
 
     // Interaction prompt
     this.prompt = scene.add.text(x, y - 40, '[E]', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffff00',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
     }).setOrigin(0.5).setVisible(false).setDepth(9999);
 
     // Quest indicator (! or ?)
     this.questIcon = scene.add.text(x, y - 48, '', {
-      fontSize: '10px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       fontStyle: 'bold',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
     }).setOrigin(0.5).setDepth(9999);
 
     this.canInteract = false;
@@ -237,9 +237,8 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
   getDialogue(questManager, gameScene) {
     // Non-quest NPCs with custom dialogue lines
     if (this.dialogueLines && !this.questId) {
-      // Add reputation-aware greetings
       if (gameScene) {
-        const greeting = this._getReputationGreeting(gameScene);
+        const greeting = this._getTimeGreeting(gameScene) || this._getReputationGreeting(gameScene);
         if (greeting) return [greeting, ...this.dialogueLines];
       }
       return this.dialogueLines;
@@ -247,7 +246,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
 
     if (!this.questId || !questManager) {
       if (gameScene) {
-        const greeting = this._getReputationGreeting(gameScene);
+        const greeting = this._getTimeGreeting(gameScene) || this._getReputationGreeting(gameScene);
         if (greeting) return [greeting];
       }
       return this.dialogueLines || ['Hello there, traveler!'];
@@ -257,6 +256,23 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     if (!quest) return this.dialogueLines || ['Hello there!'];
 
     return quest.dialogue[quest.state] || ['...'];
+  }
+
+  _getTimeGreeting(gameScene) {
+    const t = gameScene.dayTime;
+    if (t === undefined) return null;
+    // Only return time greetings sometimes (~40%)
+    if (Math.random() > 0.4) return null;
+    if (t < 0.2 || t >= 0.85) {
+      return "It's getting late...\nBe careful out there!";
+    } else if (t < 0.3) {
+      return 'Good morning, Lizzy!\nUp early, I see!';
+    } else if (t < 0.65) {
+      return 'Beautiful day, isn\'t it?';
+    } else if (t < 0.75) {
+      return 'The sun is setting...\ntime flies!';
+    }
+    return null;
   }
 
   _getReputationGreeting(gameScene) {

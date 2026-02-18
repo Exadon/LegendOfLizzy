@@ -2,10 +2,14 @@ import Phaser from 'phaser';
 
 export class Fairy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, colorIndex = 0) {
-    super(scene, x, y, 'butterfly', colorIndex);
+    super(scene, x, y, 'butterfly', 0);
 
     scene.add.existing(this);
     scene.physics.add.existing(this, false);
+
+    // Play butterfly animation based on color index
+    const butterflyAnims = ['butterfly-blue', 'butterfly-green', 'butterfly-red', 'butterfly-yellow'];
+    this.play(butterflyAnims[colorIndex % butterflyAnims.length]);
 
     this.body.setSize(10, 10);
     this.body.setOffset(3, 3);

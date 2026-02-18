@@ -14,6 +14,12 @@ export class SaveManager {
       inventory: gameScene.inventory ? gameScene.inventory.saveState() : null,
       dayTime: gameScene.dayTime ?? 0.35,
       equipment: gameScene.equipment ? gameScene.equipment.saveState() : null,
+      openedChests: gameScene._getOpenedChests ? gameScene._getOpenedChests() : [],
+      trackedQuestId: gameScene.trackedQuestId || null,
+      bestiary: gameScene.bestiary || {},
+      timedQuestId: gameScene._timedQuestId || null,
+      timedRemaining: gameScene._timedRemaining || 0,
+      tutorialShown: gameScene.tutorialShown || false,
       timestamp: Date.now(),
     };
     try {

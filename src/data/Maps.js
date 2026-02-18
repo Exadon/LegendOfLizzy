@@ -22,11 +22,12 @@ export const OVERWORLD_MAP = {
     { type: 'house-wood', x: 720, y: 260 },
   ],
   doors: [
-    { x: 492, y: 72, width: 20, height: 10, targetMap: 'house_interior', targetX: 88, targetY: 128 },
-    { x: 292, y: 472, width: 20, height: 10, targetMap: 'shop_interior', targetX: 88, targetY: 128 },
-    { x: 712, y: 252, width: 20, height: 10, targetMap: 'inn_interior', targetX: 88, targetY: 128 },
+    { x: 486, y: 68, width: 32, height: 16, targetMap: 'house_interior', targetX: 88, targetY: 128 },
+    { x: 286, y: 468, width: 32, height: 16, targetMap: 'shop_interior', targetX: 88, targetY: 128 },
+    { x: 706, y: 248, width: 32, height: 16, targetMap: 'inn_interior', targetX: 88, targetY: 128 },
     { x: 48, y: 80, width: 24, height: 14, targetMap: 'cave', targetX: 160, targetY: 230 },
     { x: 680, y: 160, width: 24, height: 14, targetMap: 'desert_temple', targetX: 160, targetY: 200 },
+    { x: 80, y: 420, width: 24, height: 14, targetMap: 'forest_dungeon', targetX: 160, targetY: 290 },
   ],
   playerSpawn: { x: 200, y: 128 },
   biomes: [
@@ -61,6 +62,8 @@ export const HOUSE_INTERIOR_MAP = {
   furniture: [
     { type: 'bed', x: 160, y: 40 },
     { type: 'table', x: 48, y: 72 },
+    { type: 'bookshelf', x: 32, y: 32 },
+    { type: 'barrel', x: 160, y: 112 },
   ],
   doors: [
     { x: 48, y: 136, width: 96, height: 20, targetMap: 'overworld', targetX: 500, targetY: 100 },
@@ -93,6 +96,9 @@ export const SHOP_INTERIOR_MAP = {
     { type: 'counter', x: 96, y: 48 },
     { type: 'table', x: 40, y: 112 },
     { type: 'table', x: 152, y: 112 },
+    { type: 'shelf', x: 32, y: 32 },
+    { type: 'shelf', x: 160, y: 32 },
+    { type: 'barrel', x: 32, y: 80 },
   ],
   interiorNPCs: [
     { id: 'shopkeeper', name: 'Shopkeeper', texture: 'miner-mike', x: 96, y: 36, role: 'shop' },
@@ -128,6 +134,10 @@ export const INN_INTERIOR_MAP = {
     { type: 'counter', x: 96, y: 48 },
     { type: 'bed', x: 40, y: 40 },
     { type: 'bed', x: 160, y: 40 },
+    { type: 'table', x: 48, y: 96 },
+    { type: 'table', x: 144, y: 96 },
+    { type: 'barrel', x: 160, y: 112 },
+    { type: 'barrel', x: 32, y: 112 },
   ],
   interiorNPCs: [
     { id: 'innkeeper', name: 'Innkeeper', texture: 'chef-chloe', x: 96, y: 36, role: 'inn' },
@@ -292,6 +302,88 @@ export const PHARAOH_CHAMBER_MAP = {
   playerSpawn: { x: 128, y: 200 },
 };
 
+export const FOREST_DUNGEON_MAP = {
+  name: 'forest_dungeon',
+  width: 20,
+  height: 20,
+  tileSize: 16,
+  floorTile: 'cave-floor',
+  isDark: true,
+  layers: {
+    ground: null,
+    collision: [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+      [1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,1],
+      [1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1],
+    ],
+  },
+  enemies: [
+    { type: 'goblin', x: 80, y: 60 },
+    { type: 'goblin', x: 200, y: 100 },
+    { type: 'goblin', x: 120, y: 200 },
+    { type: 'goblin', x: 250, y: 180 },
+    { type: 'orc', x: 160, y: 140 },
+    { type: 'orc', x: 60, y: 240 },
+    { type: 'orc', x: 260, y: 60 },
+  ],
+  doors: [
+    { x: 144, y: 308, width: 32, height: 10, targetMap: 'overworld', targetX: 100, targetY: 430 },
+    { x: 144, y: 20, width: 32, height: 10, targetMap: 'forest_boss', targetX: 96, targetY: 180 },
+  ],
+  playerSpawn: { x: 160, y: 290 },
+};
+
+export const FOREST_BOSS_MAP = {
+  name: 'forest_boss',
+  width: 14,
+  height: 14,
+  tileSize: 16,
+  floorTile: 'cave-floor',
+  isDark: true,
+  layers: {
+    ground: null,
+    collision: [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,0,0,1,1,1,1,1,1],
+    ],
+  },
+  hasBoss: true,
+  bossType: 'orc_chief',
+  doors: [
+    { x: 96, y: 216, width: 32, height: 10, targetMap: 'forest_dungeon', targetX: 160, targetY: 40 },
+  ],
+  playerSpawn: { x: 96, y: 180 },
+};
+
 export const MAPS = {
   overworld: OVERWORLD_MAP,
   house_interior: HOUSE_INTERIOR_MAP,
@@ -301,4 +393,6 @@ export const MAPS = {
   boss_room: BOSS_ROOM_MAP,
   desert_temple: DESERT_TEMPLE_MAP,
   pharaoh_chamber: PHARAOH_CHAMBER_MAP,
+  forest_dungeon: FOREST_DUNGEON_MAP,
+  forest_boss: FOREST_BOSS_MAP,
 };

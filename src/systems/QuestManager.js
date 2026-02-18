@@ -295,6 +295,131 @@ export const QUESTS = {
     },
   },
 
+  clear_forest: {
+    id: 'clear_forest',
+    name: 'The Forest Menace',
+    giver: 'ranger_reed',
+    dialogue: {
+      available: [
+        'Goblins and orcs have\noverrun the old forest!',
+        'Their chief lurks deep\ninside... defeat him!',
+      ],
+      active: [
+        'The forest dungeon entrance\nis to the southwest. Good luck!',
+      ],
+      ready: [
+        'The Orc Chief is defeated!\nYou\'re a true hero!',
+        'The forest is safe again!\nHere is your reward!',
+      ],
+      completed: [
+        'The forest is peaceful\nthanks to you!',
+      ],
+    },
+    reward: { gold: 250, xp: 500 },
+    objective: {
+      type: 'kill',
+      target: 'orc_chief',
+      count: 1,
+      description: 'Defeat the Orc Chief',
+    },
+  },
+
+  escort_chloe: {
+    id: 'escort_chloe',
+    name: 'Chloe\'s Errand',
+    giver: 'chef_chloe',
+    dialogue: {
+      available: [
+        'I need to get to the inn\nbut the monsters scare me!',
+        'Could you escort me there\nsafely? I\'ll pay you!',
+      ],
+      active: [
+        'Lead the way to the inn!\nI\'ll follow you.',
+      ],
+      ready: [
+        'We made it! Thank you\nso much for the escort!',
+        'Here\'s your reward,\nbrave warrior!',
+      ],
+      completed: [
+        'Thanks for getting me\nto the inn safely!',
+      ],
+    },
+    reward: { gold: 75, xp: 100 },
+    objective: {
+      type: 'escort',
+      target: 'chef_chloe',
+      destination: { x: 712, y: 252 },
+      count: 1,
+      description: 'Escort Chloe to the Inn',
+    },
+  },
+
+  urgent_medicine: {
+    id: 'urgent_medicine',
+    name: 'Urgent Medicine',
+    giver: 'innkeeper',
+    turnIn: 'farmer_buba',
+    dialogue: {
+      available: [
+        'Farmer Buba is very ill!\nHe needs this medicine fast!',
+        'Can you deliver it in\n90 seconds? Please hurry!',
+      ],
+      active: [
+        'Hurry! Buba needs that\nmedicine quickly!',
+      ],
+      ready: [
+        'You delivered it in time!\nThank goodness!',
+      ],
+      completed: [
+        'Buba is feeling better\nthanks to you!',
+      ],
+    },
+    turnInDialogue: [
+      'Oh, medicine from the inn!\nJust in time...',
+      'Thank you so much!\nI feel better already!',
+    ],
+    reward: { gold: 80, xp: 120 },
+    timeLimit: 90,
+    objective: {
+      type: 'deliver',
+      target: 'medicine',
+      count: 1,
+      description: 'Deliver Medicine to Buba',
+    },
+  },
+
+  lost_axe: {
+    id: 'lost_axe',
+    name: 'The Lost Axe',
+    giver: 'lumberjack_jack',
+    dialogue: {
+      available: [
+        'I lost my favorite axe\nin the forest dungeon!',
+        'Could you go find it?\nIt should be deep inside.',
+      ],
+      active: [
+        'My axe is somewhere in\nthe forest dungeon...',
+      ],
+      ready: [
+        'You found my axe!\nYou\'re a lifesaver!',
+        'Here, take this reward!\nI owe you one!',
+      ],
+      completed: [
+        'My axe is back where\nit belongs. Thanks!',
+      ],
+    },
+    reward: { gold: 60, xp: 90 },
+    objective: {
+      type: 'fetch',
+      target: 'golden_axe',
+      fetchMap: 'forest_dungeon',
+      fetchX: 240,
+      fetchY: 100,
+      count: 1,
+      description: 'Find Axe in Forest Dungeon',
+    },
+  },
+
   explore_pond: {
     id: 'explore_pond',
     name: 'The Old Pond',

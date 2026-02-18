@@ -66,11 +66,41 @@ export class MapOverlay {
       this.mapGfx.fillCircle(mx, my, 3);
     }
 
-    // House (brown)
+    // Buildings (brown rectangles with labels)
+    const buildings = [
+      { x: 500, y: 70, label: 'House', w: 12, h: 10 },
+      { x: 300, y: 480, label: 'Shop', w: 12, h: 10 },
+      { x: 720, y: 255, label: 'Inn', w: 12, h: 10 },
+    ];
     this.mapGfx.fillStyle(0x8b5e3c);
-    const houseX = mapX + (500 / 800) * mapW;
-    const houseY = mapY + (70 / 608) * mapH;
-    this.mapGfx.fillRect(houseX - 6, houseY - 5, 12, 10);
+    for (const b of buildings) {
+      const bx = mapX + (b.x / 800) * mapW;
+      const by = mapY + (b.y / 608) * mapH;
+      this.mapGfx.fillRect(bx - b.w / 2, by - b.h / 2, b.w, b.h);
+      const label = scene.add.text(bx, by - 8, b.label, {
+        fontSize: '6px', fontFamily: 'Arial, sans-serif',
+        color: '#ddccaa', stroke: '#000000', strokeThickness: 1,
+      }).setOrigin(0.5);
+      this.container.add(label);
+    }
+
+    // Dungeon entrances (red triangles)
+    const entrances = [
+      { x: 48, y: 80, label: 'Cave' },
+      { x: 680, y: 160, label: 'Temple' },
+      { x: 80, y: 420, label: 'Forest' },
+    ];
+    this.mapGfx.fillStyle(0xcc4444);
+    for (const e of entrances) {
+      const ex = mapX + (e.x / 800) * mapW;
+      const ey = mapY + (e.y / 608) * mapH;
+      this.mapGfx.fillTriangle(ex, ey - 4, ex - 3, ey + 2, ex + 3, ey + 2);
+      const label = scene.add.text(ex, ey + 5, e.label, {
+        fontSize: '6px', fontFamily: 'Arial, sans-serif',
+        color: '#ff8888', stroke: '#000000', strokeThickness: 1,
+      }).setOrigin(0.5);
+      this.container.add(label);
+    }
 
     // Player dot (blinking red)
     this.playerDot = scene.add.circle(w / 2, h / 2, 3, 0xff0000);
@@ -95,8 +125,8 @@ export class MapOverlay {
 
     // Title
     const title = scene.add.text(w / 2, mapY - 10, 'WORLD MAP', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffdd00',
       stroke: '#000000',
       strokeThickness: 2,
@@ -105,14 +135,14 @@ export class MapOverlay {
 
     // Hint
     const hint = scene.add.text(w / 2, h - 16, 'Press M to close', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#aaaaaa',
     }).setOrigin(0.5);
     this.container.add(hint);
   }
 
-  show(playerX, playerY, worldW, worldH, npcs) {
+  show(playerX, playerY, worldW, worldH, npcs, questManager) {
     this.visible = true;
     this.container.setVisible(true);
 
@@ -131,6 +161,20 @@ export class MapOverlay {
         const dot = this.scene.add.circle(nx, ny, 2, 0xffff00);
         this.container.add(dot);
         this.npcDots.push(dot);
+
+        // Quest marker — show "!" for NPCs with available/ready quests
+        if (questManager && npc.questId) {
+          const q = questManager.getQuest(npc.questId);
+          if (q && (q.state === 'available' || q.state === 'ready')) {
+            const marker = this.scene.add.text(nx, ny - 5, '!', {
+              fontSize: '8px', fontFamily: 'Arial, sans-serif',
+              color: q.state === 'ready' ? '#44ff44' : '#ffdd00',
+              fontStyle: 'bold',
+            }).setOrigin(0.5);
+            this.container.add(marker);
+            this.npcDots.push(marker);
+          }
+        }
       });
     }
   }
@@ -142,11 +186,11 @@ export class MapOverlay {
     this.npcDots = [];
   }
 
-  toggle(playerX, playerY, worldW, worldH, npcs) {
+  toggle(playerX, playerY, worldW, worldH, npcs, questManager) {
     if (this.visible) {
       this.hide();
     } else {
-      this.show(playerX, playerY, worldW, worldH, npcs);
+      this.show(playerX, playerY, worldW, worldH, npcs, questManager);
     }
     return this.visible;
   }

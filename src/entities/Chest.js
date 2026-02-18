@@ -24,11 +24,11 @@ export class Chest extends Phaser.Physics.Arcade.Sprite {
 
     // Prompt
     this.prompt = scene.add.text(x, y - 24, '[E]', {
-      fontSize: '9px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffdd00',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
     }).setOrigin(0.5).setVisible(false).setDepth(9999);
 
     // Sparkle hint

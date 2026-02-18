@@ -224,6 +224,84 @@ export class SFX {
     });
   }
 
+  // Fireball cast - whooshing flame
+  _fireball() {
+    this._osc('sawtooth', 200, 600, 0.15, 0.1);
+    this._osc('square', 150, 400, 0.12, 0.06);
+  }
+
+  // Ice bolt cast - crystalline ping
+  _icebolt() {
+    this._osc('sine', 800, 1600, 0.12, 0.08);
+    this._osc('triangle', 1200, 2000, 0.08, 0.05);
+  }
+
+  // Heal cast - warm ascending chime
+  _heal() {
+    const t = this.ctx.currentTime;
+    const notes = [392, 494, 587, 784];
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.08);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.setValueAtTime(0.08, t + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.2);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + i * 0.08 + 0.25);
+    });
+  }
+
+  // Level up - ascending major arpeggio
+  _levelUp() {
+    const t = this.ctx.currentTime;
+    const notes = [262, 330, 392, 523]; // C-E-G-C
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.1);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.setValueAtTime(0.12, t + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.15);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + i * 0.1 + 0.18);
+    });
+  }
+
+  // Boss slam - heavy impact
+  _bossSlam() {
+    this._osc('sine', 80, 40, 0.2, 0.15);
+    const t = this.ctx.currentTime;
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.06);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.1, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    noise.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start(t);
+  }
+
+  // Item pickup - bright ping
+  _itemPickup() {
+    this._osc('triangle', 800, 1200, 0.1, 0.1);
+  }
+
+  // Menu cancel - descending buzz
+  _menuCancel() {
+    this._osc('square', 400, 200, 0.12, 0.1);
+  }
+
   // Chicken collect - ascending chirp pair
   _chickenCollect() {
     this._osc('sine', 800, 1400, 0.08, 0.1);

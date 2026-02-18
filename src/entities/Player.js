@@ -337,6 +337,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.swordHitbox.body.setSize(size, size);
     this.swordHitbox.body.enable = true;
 
+    // Weapon slash visual
+    this._slashEffect(off, size, charged);
+
     // Charged attack visual: screen flash + bigger particle burst
     if (charged) {
       this._chargedAttackEffect();
@@ -345,6 +348,50 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Combo visual: quick spark
     if (combo) {
       this._comboSparkEffect();
+    }
+  }
+
+  _slashEffect(off, size, charged) {
+    const weaponColor = this._getWeaponColor();
+    const equip = this.scene.equipment;
+    const isFireSword = equip && equip.weapon === 'fire_sword';
+    const slashW = charged ? 18 : 14;
+    const slashH = charged ? 4 : 3;
+
+    // Arc/rectangle slash
+    const sx = this.x + off.x;
+    const sy = this.y + off.y;
+    let angle = 0;
+    if (this.direction === 'right') angle = 0;
+    else if (this.direction === 'left') angle = Math.PI;
+    else if (this.direction === 'down') angle = Math.PI / 2;
+    else angle = -Math.PI / 2;
+
+    const slash = this.scene.add.rectangle(sx, sy, slashW, slashH, weaponColor, 0.7);
+    slash.setRotation(angle);
+    slash.setDepth(9999);
+    this.scene.tweens.add({
+      targets: slash,
+      alpha: 0, scaleX: 1.5, scaleY: 0.3,
+      duration: 150,
+      onComplete: () => slash.destroy(),
+    });
+
+    // Fire sword: trailing flame particles
+    if (isFireSword) {
+      for (let i = 0; i < 3; i++) {
+        const fx = sx + (Math.random() - 0.5) * 8;
+        const fy = sy + (Math.random() - 0.5) * 8;
+        const flame = this.scene.add.circle(fx, fy, 2, [0xff4400, 0xff8800, 0xffcc00][i], 0.8);
+        flame.setDepth(9999);
+        this.scene.tweens.add({
+          targets: flame,
+          y: fy - 8 - Math.random() * 6,
+          alpha: 0, scale: 0.3,
+          duration: 250 + Math.random() * 100,
+          onComplete: () => flame.destroy(),
+        });
+      }
     }
   }
 
@@ -435,6 +482,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.health -= amount;
     this.invulnerable = true;
     this.invulnerableTimer = 1000;
+
+    // White damage flash (100ms)
+    this.setTintFill(0xffffff);
+    this.scene.time.delayedCall(100, () => {
+      if (this.active) this.clearTint();
+    });
 
     // Knockback away from current facing
     const knockback = 120;

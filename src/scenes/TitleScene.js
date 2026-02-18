@@ -17,6 +17,10 @@ export class TitleScene extends Phaser.Scene {
       this.registry.set('sfx', new SFX());
     }
     const sfx = this.registry.get('sfx');
+    // Apply saved mute preference
+    if (localStorage.getItem('lizzy-muted') === 'true') {
+      sfx.muted = true;
+    }
 
     this.cameras.main.setBackgroundColor('#0a0a1a');
 
@@ -36,14 +40,14 @@ export class TitleScene extends Phaser.Scene {
 
     // Title text
     this.add.text(w / 2, h / 3 - 12, 'LEGEND OF', {
-      fontSize: '10px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#8888cc',
     }).setOrigin(0.5);
 
     const title = this.add.text(w / 2, h / 3 + 6, 'LIZZY', {
-      fontSize: '22px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '18px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffdd00',
       fontStyle: 'bold',
       stroke: '#000000',
@@ -60,10 +64,54 @@ export class TitleScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    // Lizzy idle sprite
+    // Lizzy idle sprite with gentle breathing animation
     const lizzy = this.add.sprite(w / 2, h / 2 + 20, 'lizzy');
     lizzy.play('lizzy-idle-down');
     lizzy.setScale(1.5);
+    this.tweens.add({
+      targets: lizzy,
+      scaleX: 1.55, scaleY: 1.45,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Floating leaf particles
+    this.time.addEvent({
+      delay: 600,
+      callback: () => {
+        const lx = -10;
+        const ly = Math.random() * h * 0.7;
+        const colors = [0x88cc44, 0x66aa33, 0xaadd66, 0x558822];
+        const leaf = this.add.ellipse(lx, ly, 4, 2, colors[Math.floor(Math.random() * 4)], 0.6);
+        leaf.setDepth(1);
+        this.tweens.add({
+          targets: leaf,
+          x: w + 20,
+          y: ly + (Math.random() - 0.3) * 60,
+          rotation: Math.PI * 2 * (Math.random() > 0.5 ? 1 : -1),
+          alpha: 0,
+          duration: 4000 + Math.random() * 2000,
+          ease: 'Sine.easeInOut',
+          onComplete: () => leaf.destroy(),
+        });
+      },
+      loop: true,
+    });
+
+    // Grass line at bottom
+    for (let i = 0; i < w; i += 6) {
+      const gh = 4 + Math.random() * 6;
+      const grass = this.add.rectangle(i, h - gh / 2 - 14, 2, gh, 0x337722, 0.4 + Math.random() * 0.3);
+      this.tweens.add({
+        targets: grass, scaleX: 0.6,
+        duration: 800 + Math.random() * 600,
+        yoyo: true, repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: Math.random() * 800,
+      });
+    }
 
     // Check for save data
     const hasSave = SaveManager.hasSave();
@@ -71,8 +119,8 @@ export class TitleScene extends Phaser.Scene {
     // Press ENTER prompt
     const promptText = hasSave ? 'ENTER: Continue  N: New Game' : 'Press ENTER';
     const prompt = this.add.text(w / 2, h - 36, promptText, {
-      fontSize: '9px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
     }).setOrigin(0.5);
 
@@ -86,8 +134,8 @@ export class TitleScene extends Phaser.Scene {
 
     // Credits
     this.add.text(w / 2, h - 14, 'Assets by Kenmi Art', {
-      fontSize: '8px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#555577',
     }).setOrigin(0.5);
 
@@ -113,6 +161,12 @@ export class TitleScene extends Phaser.Scene {
               inventory: save.inventory,
               dayTime: save.dayTime,
               equipment: save.equipment,
+              openedChests: save.openedChests || [],
+              trackedQuestId: save.trackedQuestId || null,
+              bestiary: save.bestiary || {},
+              timedQuestId: save.timedQuestId || null,
+              timedRemaining: save.timedRemaining || 0,
+              tutorialShown: save.tutorialShown || false,
             });
             return;
           }

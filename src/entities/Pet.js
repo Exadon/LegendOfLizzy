@@ -16,7 +16,7 @@ export class Pet extends Phaser.Physics.Arcade.Sprite {
     this.play('slime-idle');
 
     this.followSpeed = 70;
-    this.collectRadius = 40;
+    this.collectRadius = 30;
     this._bobTimer = 0;
   }
 
@@ -44,10 +44,26 @@ export class Pet extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(this.y);
   }
 
-  // Check for nearby loot drops and auto-collect
+  // Attract nearby loot drops toward the player
   collectNearbyLoot(scene) {
-    // Hearts and potion drops are physics objects with overlap handlers
-    // The pet just moves toward them and the player's overlap handler picks them up
-    // So we'll attract drops toward the player instead
+    if (!scene.lootDrops) return;
+    const children = scene.lootDrops.getChildren();
+    for (const loot of children) {
+      if (!loot.active) continue;
+      const dist = Phaser.Math.Distance.Between(this.x, this.y, loot.x, loot.y);
+      if (dist < this.collectRadius) {
+        // Tween loot toward the player
+        if (!loot._magnetized) {
+          loot._magnetized = true;
+          scene.tweens.add({
+            targets: loot,
+            x: scene.player.x,
+            y: scene.player.y,
+            duration: 200,
+            ease: 'Power2',
+          });
+        }
+      }
+    }
   }
 }

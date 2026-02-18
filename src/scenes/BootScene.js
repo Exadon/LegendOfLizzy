@@ -10,12 +10,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // Ensure CuteFantasy font is loaded before proceeding
-    document.fonts.load('10px CuteFantasy').then(() => {
-      this.scene.start('Preload');
-    }).catch(() => {
-      // Fallback: proceed anyway after a delay
-      this.time.delayedCall(500, () => this.scene.start('Preload'));
-    });
+    this.scene.start('Preload');
   }
 }

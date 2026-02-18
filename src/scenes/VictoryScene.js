@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { Music } from '../systems/Music.js';
 
 export class VictoryScene extends Phaser.Scene {
   constructor() {
@@ -16,6 +17,12 @@ export class VictoryScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#0a0a1a');
     this.cameras.main.fadeIn(1000, 0, 0, 0);
+
+    // Play victory music
+    const music = this.registry.get('music');
+    if (music) {
+      music.play('victory', sfx);
+    }
 
     // Starfield
     for (let i = 0; i < 40; i++) {
@@ -57,7 +64,7 @@ export class VictoryScene extends Phaser.Scene {
     this.time.delayedCall(500, () => {
       const victory = this.add.text(w / 2, 20, 'VICTORY', {
         fontSize: '18px',
-        fontFamily: 'CuteFantasy',
+        fontFamily: 'Arial, sans-serif',
         color: '#ffdd00',
         fontStyle: 'bold',
         stroke: '#000000',
@@ -92,16 +99,17 @@ export class VictoryScene extends Phaser.Scene {
     // Story text
     this.time.delayedCall(2000, () => {
       const storyLines = [
-        'With the Skeleton King slain',
-        'and the Pharaoh\'s curse lifted,',
+        'With the Skeleton King slain,',
+        'the Pharaoh\'s curse lifted,',
+        'and the Orc Chief vanquished,',
         'peace returns to the land.',
         '',
         'Lizzy, the legendary warrior,',
         'has saved everyone.',
       ];
       const story = this.add.text(w / 2, 90, storyLines.join('\n'), {
-        fontSize: '8px',
-        fontFamily: 'CuteFantasy',
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
         color: '#ccccdd',
         align: 'center',
         lineSpacing: 4,
@@ -120,8 +128,8 @@ export class VictoryScene extends Phaser.Scene {
         `Gold Earned: ${gold}`,
         `Quests Completed: ${quests}`,
       ].join('\n'), {
-        fontSize: '8px',
-        fontFamily: 'CuteFantasy',
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
         color: '#aabbcc',
         align: 'center',
         lineSpacing: 3,
@@ -138,8 +146,8 @@ export class VictoryScene extends Phaser.Scene {
         'Built with Phaser 3',
         'Made with love',
       ].join('\n'), {
-        fontSize: '8px',
-        fontFamily: 'CuteFantasy',
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
         color: '#888899',
         align: 'center',
         lineSpacing: 3,
@@ -150,8 +158,8 @@ export class VictoryScene extends Phaser.Scene {
     // Return to title prompt
     this.time.delayedCall(7000, () => {
       const prompt = this.add.text(w / 2, h - 14, 'Press ENTER to return', {
-        fontSize: '9px',
-        fontFamily: 'CuteFantasy',
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
         color: '#ffffff',
       }).setOrigin(0.5).setAlpha(0);
       this.tweens.add({

@@ -18,8 +18,8 @@ export class PreloadScene extends Phaser.Scene {
     bar.setOrigin(0, 0.5);
 
     const label = this.add.text(width / 2, barY - 16, 'Loading...', {
-      fontSize: '10px',
-      fontFamily: 'CuteFantasy',
+      fontSize: '12px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
     }).setOrigin(0.5);
 
@@ -106,8 +106,8 @@ export class PreloadScene extends Phaser.Scene {
       frameHeight: 32,
     });
     this.load.spritesheet('butterfly', 'assets/Cute_Fantasy/Animals/Butterfly/Butterfly.png', {
-      frameWidth: 16,
-      frameHeight: 16,
+      frameWidth: 8,
+      frameHeight: 8,
     });
 
     // --- Cave tiles ---
@@ -141,7 +141,7 @@ export class PreloadScene extends Phaser.Scene {
       frameWidth: 32, frameHeight: 32,
     });
     this.load.spritesheet('pharaoh', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/NPC/Pharaoh.png', {
-      frameWidth: 64, frameHeight: 64,
+      frameWidth: 32, frameHeight: 32,
     });
     this.load.image('desert-temple', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/Temple/Desert_Temple.png');
     this.load.image('desert-obelisk-1', 'assets/Cute_Fantasy_Desert/Cute_Fantasy_Desert/Temple/Desert_Obelisk_1.png');
@@ -169,7 +169,7 @@ export class PreloadScene extends Phaser.Scene {
       frameWidth: 32, frameHeight: 32,
     });
     this.load.spritesheet('orc-grunt', 'assets/Cute_Fantasy_Characters/Cute_Fantasy_Characters/Orcs/Orc_Grunt.png', {
-      frameWidth: 64, frameHeight: 64,
+      frameWidth: 32, frameHeight: 32,
     });
   }
 
@@ -203,6 +203,8 @@ export class PreloadScene extends Phaser.Scene {
     }
 
     this._defineUIFrames();
+    this._generateTorchLight();
+    this._generatePortraits();
     this.createAnimations();
     this.scene.start('Title');
   }
@@ -380,19 +382,19 @@ export class PreloadScene extends Phaser.Scene {
     const HORSE_COLS = 8;
     this.anims.create({
       key: 'horse-idle-down',
-      frames: this.anims.generateFrameNumbers('horse', { start: 0, end: 3 }),
+      frames: this.anims.generateFrameNumbers('horse', { start: 0, end: 1 }),
       frameRate: 6,
       repeat: -1,
     });
     this.anims.create({
       key: 'horse-idle-right',
-      frames: this.anims.generateFrameNumbers('horse', { start: HORSE_COLS, end: HORSE_COLS + 3 }),
+      frames: this.anims.generateFrameNumbers('horse', { start: HORSE_COLS, end: HORSE_COLS + 1 }),
       frameRate: 6,
       repeat: -1,
     });
     this.anims.create({
       key: 'horse-idle-up',
-      frames: this.anims.generateFrameNumbers('horse', { start: HORSE_COLS * 2, end: HORSE_COLS * 2 + 3 }),
+      frames: this.anims.generateFrameNumbers('horse', { start: HORSE_COLS * 2, end: HORSE_COLS * 2 + 1 }),
       frameRate: 6,
       repeat: -1,
     });
@@ -414,6 +416,117 @@ export class PreloadScene extends Phaser.Scene {
       frameRate: 8,
       repeat: -1,
     });
+    // --- Pharaoh animations (32x32, 8 cols x 10 rows) ---
+    const PHARAOH_COLS = 8;
+    this.anims.create({
+      key: 'pharaoh-idle-down',
+      frames: this.anims.generateFrameNumbers('pharaoh', { start: 0, end: 5 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'pharaoh-idle-right',
+      frames: this.anims.generateFrameNumbers('pharaoh', { start: PHARAOH_COLS, end: PHARAOH_COLS + 5 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'pharaoh-idle-up',
+      frames: this.anims.generateFrameNumbers('pharaoh', { start: PHARAOH_COLS * 2, end: PHARAOH_COLS * 2 + 5 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'pharaoh-walk-down',
+      frames: this.anims.generateFrameNumbers('pharaoh', { start: PHARAOH_COLS * 3, end: PHARAOH_COLS * 3 + 5 }),
+      frameRate: 8,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'pharaoh-walk-right',
+      frames: this.anims.generateFrameNumbers('pharaoh', { start: PHARAOH_COLS * 4, end: PHARAOH_COLS * 4 + 5 }),
+      frameRate: 8,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'pharaoh-walk-up',
+      frames: this.anims.generateFrameNumbers('pharaoh', { start: PHARAOH_COLS * 5, end: PHARAOH_COLS * 5 + 5 }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
+    // --- Goblin animations (32x32, 6 cols x 10 rows) ---
+    const GOB_COLS = 6;
+    this.anims.create({
+      key: 'goblin-idle-down',
+      frames: this.anims.generateFrameNumbers('goblin-thief', { start: 0, end: 5 }),
+      frameRate: 6, repeat: -1,
+    });
+    this.anims.create({
+      key: 'goblin-walk-down',
+      frames: this.anims.generateFrameNumbers('goblin-thief', { start: GOB_COLS * 3, end: GOB_COLS * 3 + 5 }),
+      frameRate: 8, repeat: -1,
+    });
+    this.anims.create({
+      key: 'goblin-walk-right',
+      frames: this.anims.generateFrameNumbers('goblin-thief', { start: GOB_COLS * 4, end: GOB_COLS * 4 + 5 }),
+      frameRate: 8, repeat: -1,
+    });
+    this.anims.create({
+      key: 'goblin-walk-up',
+      frames: this.anims.generateFrameNumbers('goblin-thief', { start: GOB_COLS * 5, end: GOB_COLS * 5 + 5 }),
+      frameRate: 8, repeat: -1,
+    });
+
+    // --- Orc animations (32x32, 6 cols x 10 rows) ---
+    const ORC_COLS = 6;
+    this.anims.create({
+      key: 'orc-idle-down',
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: 0, end: 5 }),
+      frameRate: 6, repeat: -1,
+    });
+    this.anims.create({
+      key: 'orc-walk-down',
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 3, end: ORC_COLS * 3 + 5 }),
+      frameRate: 8, repeat: -1,
+    });
+    this.anims.create({
+      key: 'orc-walk-right',
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 4, end: ORC_COLS * 4 + 5 }),
+      frameRate: 8, repeat: -1,
+    });
+    this.anims.create({
+      key: 'orc-walk-up',
+      frames: this.anims.generateFrameNumbers('orc-grunt', { start: ORC_COLS * 5, end: ORC_COLS * 5 + 5 }),
+      frameRate: 8, repeat: -1,
+    });
+
+    // --- Butterfly animations (8x8, 2 cols x 8 rows = 16 frames) ---
+    // Row pairs per color: rows 0-1 = blue, rows 2-3 = green, rows 4-5 = red, rows 6-7 = yellow
+    this.anims.create({
+      key: 'butterfly-blue',
+      frames: this.anims.generateFrameNumbers('butterfly', { frames: [0, 2] }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'butterfly-green',
+      frames: this.anims.generateFrameNumbers('butterfly', { frames: [4, 6] }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'butterfly-red',
+      frames: this.anims.generateFrameNumbers('butterfly', { frames: [8, 10] }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: 'butterfly-yellow',
+      frames: this.anims.generateFrameNumbers('butterfly', { frames: [12, 14] }),
+      frameRate: 6,
+      repeat: -1,
+    });
   }
 
   _defineUIFrames() {
@@ -427,6 +540,10 @@ export class PreloadScene extends Phaser.Scene {
       framesTex.add('panel-yellow', 0, 0, 192, 96, 48);
       framesTex.add('panel-red', 0, 0, 240, 96, 48);
       framesTex.add('panel-purple', 0, 0, 288, 96, 48);
+
+      // Individual panel sprites (28x31 each, on 48px grid starting at 10,10)
+      framesTex.add('tab-orange', 0, 10, 10, 28, 31);
+      framesTex.add('tab-gray', 0, 10, 58, 28, 31);
     }
 
     // Book_UI: extract the open tan book (top-left, ~240x144)
@@ -434,6 +551,45 @@ export class PreloadScene extends Phaser.Scene {
     if (bookTex && bookTex.key !== '__MISSING') {
       bookTex.add('book-open-tan', 0, 0, 0, 240, 144);
       bookTex.add('book-open-gray', 0, 240, 0, 240, 144);
+    }
+  }
+
+  _generateTorchLight() {
+    // White radial gradient circle for cave fog-of-war erase
+    const size = 160; // diameter
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2;
+    const cy = size / 2;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size / 2);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.4, 'rgba(255,255,255,0.8)');
+    gradient.addColorStop(0.7, 'rgba(255,255,255,0.3)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    this.textures.addCanvas('torch-light', canvas);
+  }
+
+  _generatePortraits() {
+    // Crop top 24x24 of each NPC's first frame for dialogue portraits
+    const npcTextures = [
+      'farmer-bob', 'farmer-buba', 'chef-chloe',
+      'fisherman-fin', 'lumberjack-jack', 'miner-mike',
+    ];
+    for (const key of npcTextures) {
+      const tex = this.textures.get(key);
+      if (!tex || tex.key === '__MISSING') continue;
+      const source = tex.getSourceImage();
+      const canvas = document.createElement('canvas');
+      canvas.width = 24;
+      canvas.height = 24;
+      const ctx = canvas.getContext('2d');
+      // Crop center-top 24x24 from 64x64 first frame
+      ctx.drawImage(source, 20, 4, 24, 24, 0, 0, 24, 24);
+      this.textures.addCanvas(`portrait-${key}`, canvas);
     }
   }
 
@@ -461,11 +617,11 @@ export class PreloadScene extends Phaser.Scene {
       if (isOrange) {
         // Calculate relative brightness of original pixel
         const lum = (r * 0.299 + g * 0.587 + b * 0.114);
-        // Map to dark range for black hair (preserve shading detail)
-        const dark = Math.floor(lum * 0.18);
-        data[i] = dark;
-        data[i + 1] = dark;
-        data[i + 2] = dark + 4; // Tiny blue tint for richness
+        // Map to brown hair (preserve shading detail)
+        const t = lum / 255;
+        data[i] = Math.floor(60 + t * 80);      // R: 60-140
+        data[i + 1] = Math.floor(30 + t * 50);   // G: 30-80
+        data[i + 2] = Math.floor(10 + t * 25);   // B: 10-35
       }
     }
 

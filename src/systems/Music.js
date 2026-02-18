@@ -52,6 +52,106 @@ const TRACKS = {
     bassVol: 0.04,
     melodyVol: 0.025,
   },
+  boss: {
+    bpm: 160,
+    // Am/Dm aggressive: i-iv progression, staccato
+    chords: [
+      [220, 262, 330],  // Am
+      [147, 175, 220],  // Dm
+      [220, 262, 330],  // Am
+      [165, 196, 247],  // Em
+    ],
+    bass: [110, 73, 110, 82],
+    melody: [
+      660, 784, 880, 784, 660, 587, 523, 587,
+      660, 784, 880, 1047, 880, 784, 660, 587,
+      523, 587, 660, 784, 880, 784, 660, 523,
+      587, 660, 523, 440, 523, 587, 660, 784,
+    ],
+    arpSpeed: 3,
+    melodySpeed: 2,
+    wave: 'square',
+    bassWave: 'square',
+    melodyWave: 'square',
+    volume: 0.04,
+    bassVol: 0.06,
+    melodyVol: 0.035,
+  },
+  cave: {
+    bpm: 70,
+    // Sparse, deep drones with occasional high pings
+    chords: [
+      [82, 110, 165],   // deep fifth
+      [73, 98, 147],    // lower drone
+      [82, 110, 165],   // repeat
+      [98, 131, 196],   // slightly higher
+    ],
+    bass: [41, 37, 41, 49],
+    melody: [
+      0, 0, 0, 1047, 0, 0, 0, 0,
+      0, 0, 784, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 1319, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 880, 0,
+    ],
+    arpSpeed: 1,
+    melodySpeed: 0.5,
+    wave: 'sine',
+    bassWave: 'sine',
+    melodyWave: 'triangle',
+    volume: 0.03,
+    bassVol: 0.05,
+    melodyVol: 0.02,
+  },
+  desert: {
+    bpm: 100,
+    // Pentatonic open fifths, lighter feel
+    chords: [
+      [220, 330, 440],  // A open fifth
+      [196, 294, 392],  // G open fifth
+      [175, 262, 349],  // F open fifth
+      [196, 294, 392],  // G open fifth
+    ],
+    bass: [110, 98, 87, 98],
+    melody: [
+      440, 494, 587, 659, 587, 494, 440, 0,
+      392, 440, 494, 587, 494, 440, 392, 0,
+      349, 440, 494, 587, 659, 587, 494, 440,
+      392, 440, 587, 494, 440, 392, 349, 0,
+    ],
+    arpSpeed: 2,
+    melodySpeed: 1.5,
+    wave: 'triangle',
+    bassWave: 'sine',
+    melodyWave: 'sawtooth',
+    volume: 0.03,
+    bassVol: 0.04,
+    melodyVol: 0.025,
+  },
+  victory: {
+    bpm: 120,
+    // C major bright celebratory: I-IV-V-I ascending
+    chords: [
+      [262, 330, 392],  // C major
+      [175, 220, 262],  // F major
+      [196, 247, 294],  // G major
+      [262, 330, 392],  // C major (high)
+    ],
+    bass: [131, 87, 98, 131],
+    melody: [
+      523, 587, 659, 784, 880, 784, 659, 784,
+      880, 1047, 880, 784, 659, 784, 880, 1047,
+      784, 880, 1047, 1175, 1047, 880, 784, 880,
+      1047, 1175, 1319, 1175, 1047, 880, 784, 1047,
+    ],
+    arpSpeed: 2,
+    melodySpeed: 2,
+    wave: 'triangle',
+    bassWave: 'sine',
+    melodyWave: 'sine',
+    volume: 0.04,
+    bassVol: 0.05,
+    melodyVol: 0.035,
+  },
 };
 
 export class Music {
@@ -60,6 +160,7 @@ export class Music {
     this.masterGain = null;
     this.playing = false;
     this.currentTrack = null;
+    this.currentTrackName = null;
     this.scheduleId = null;
     this.nextNoteTime = 0;
     this.arpIndex = 0;
@@ -91,10 +192,11 @@ export class Music {
     if (!track) return;
 
     // If already playing this track, do nothing
-    if (this.playing && this.currentTrack === track) return;
+    if (this.playing && this.currentTrackName === trackName) return;
 
     this.stop();
     this.currentTrack = track;
+    this.currentTrackName = trackName;
     this.playing = true;
     this.arpIndex = 0;
     this.bassIndex = 0;
@@ -130,6 +232,7 @@ export class Music {
     }
     this.activeNodes = [];
     this.currentTrack = null;
+    this.currentTrackName = null;
   }
 
   fadeOut(duration = 1.5) {
