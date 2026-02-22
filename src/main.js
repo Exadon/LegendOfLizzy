@@ -15,6 +15,9 @@ const config = {
   // making them blocky. PreloadScene already sets NEAREST on all sprite textures.
   antialias: false,
   roundPixels: true,
+  input: {
+    gamepad: true,
+  },
   physics: {
     default: 'arcade',
     arcade: {

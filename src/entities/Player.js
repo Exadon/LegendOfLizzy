@@ -183,11 +183,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (this.isCharging) return;
 
+    // Gamepad input
+    let padLeft = false, padRight = false, padUp = false, padDown = false;
+    let padAttack = false, padDodge = false;
+    const pad = this.scene.input.gamepad && this.scene.input.gamepad.pad1;
+    if (pad) {
+      const deadzone = 0.2;
+      const lx = pad.leftStick ? pad.leftStick.x : 0;
+      const ly = pad.leftStick ? pad.leftStick.y : 0;
+      if (lx < -deadzone) padLeft = true;
+      else if (lx > deadzone) padRight = true;
+      if (ly < -deadzone) padUp = true;
+      else if (ly > deadzone) padDown = true;
+      // D-pad
+      if (pad.left && pad.left.value) padLeft = true;
+      if (pad.right && pad.right.value) padRight = true;
+      if (pad.up && pad.up.value) padUp = true;
+      if (pad.down && pad.down.value) padDown = true;
+      // Buttons: A (index 0) = attack, B (index 1) = dodge
+      padAttack = pad.buttons[0] && pad.buttons[0].value > 0.5;
+      padDodge = pad.buttons[1] && pad.buttons[1].value > 0.5;
+      // Start button = menu
+      if (pad.buttons[9] && Phaser.Input.Gamepad && pad.buttons[9].value > 0.5 && !this._padMenuDebounce) {
+        this._padMenuDebounce = true;
+        this.scene.events.emit('gamepad-menu');
+      } else if (pad.buttons[9] && pad.buttons[9].value < 0.1) {
+        this._padMenuDebounce = false;
+      }
+    }
+
     // Movement
-    const left = this.cursors.left.isDown || this.wasd.left.isDown;
-    const right = this.cursors.right.isDown || this.wasd.right.isDown;
-    const up = this.cursors.up.isDown || this.wasd.up.isDown;
-    const down = this.cursors.down.isDown || this.wasd.down.isDown;
+    const left = this.cursors.left.isDown || this.wasd.left.isDown || padLeft;
+    const right = this.cursors.right.isDown || this.wasd.right.isDown || padRight;
+    const up = this.cursors.up.isDown || this.wasd.up.isDown || padUp;
+    const down = this.cursors.down.isDown || this.wasd.down.isDown || padDown;
 
     let vx = 0;
     let vy = 0;
@@ -214,11 +243,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       vy *= 0.707;
     }
 
-    // Dodge roll
-    if (Phaser.Input.Keyboard.JustDown(this.dodgeKey) && this.dodgeCooldown <= 0) {
+    // Dodge roll (keyboard or gamepad B)
+    const doDodge = Phaser.Input.Keyboard.JustDown(this.dodgeKey) ||
+      (padDodge && !this._padDodgeHeld && this.dodgeCooldown <= 0);
+    this._padDodgeHeld = padDodge;
+    if (doDodge && this.dodgeCooldown <= 0) {
       this.dodge(vx, vy);
       return;
     }
+
+    // Gamepad attack
+    if (padAttack && !this._padAttackHeld && !this.isAttacking) {
+      this._padAttackHeld = true;
+      this.attack(false);
+      return;
+    }
+    if (!padAttack) this._padAttackHeld = false;
 
     this.setVelocity(vx, vy);
 

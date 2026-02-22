@@ -545,13 +545,13 @@ export class PreloadScene extends Phaser.Scene {
     // UI_Frames: 1296x336, 7 rows of 48px each (orange, gray, green, blue, yellow, red, purple)
     const framesTex = this.textures.get('ui-frames');
     if (framesTex && framesTex.key !== '__MISSING') {
-      framesTex.add('panel-orange', 0, 0, 0, 96, 48);
-      framesTex.add('panel-gray', 0, 0, 48, 96, 48);
-      framesTex.add('panel-green', 0, 0, 96, 96, 48);
-      framesTex.add('panel-blue', 0, 0, 144, 96, 48);
-      framesTex.add('panel-yellow', 0, 0, 192, 96, 48);
-      framesTex.add('panel-red', 0, 0, 240, 96, 48);
-      framesTex.add('panel-purple', 0, 0, 288, 96, 48);
+      framesTex.add('panel-orange', 0, 0, 0, 48, 48);
+      framesTex.add('panel-gray', 0, 0, 48, 48, 48);
+      framesTex.add('panel-green', 0, 0, 96, 48, 48);
+      framesTex.add('panel-blue', 0, 0, 144, 48, 48);
+      framesTex.add('panel-yellow', 0, 0, 192, 48, 48);
+      framesTex.add('panel-red', 0, 0, 240, 48, 48);
+      framesTex.add('panel-purple', 0, 0, 288, 48, 48);
 
       // Individual panel sprites (28x31 each, on 48px grid starting at 10,10)
       framesTex.add('tab-orange', 0, 10, 10, 28, 31);

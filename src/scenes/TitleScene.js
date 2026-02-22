@@ -193,6 +193,13 @@ export class TitleScene extends Phaser.Scene {
               tutorialShown: save.tutorialShown || false,
               playerAttackBonus: save.playerAttackBonus || 0,
               unlockedTeleports: save.unlockedTeleports || [],
+              starFragments: save.starFragments || 0,
+              isNewGamePlus: save.isNewGamePlus || false,
+              materials: save.materials || {},
+              darkSeals: save.darkSeals || 0,
+              petAffection: save.petAffection || 0,
+              visitedChunks: save.visitedChunks || {},
+              lichTowerUnlocked: save.lichTowerUnlocked || false,
             });
             return;
           }

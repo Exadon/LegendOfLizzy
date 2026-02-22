@@ -1,7 +1,20 @@
 import Phaser from 'phaser';
 import { EQUIPMENT } from '../systems/Equipment.js';
+import { BESTIARY_LORE } from '../data/BestiaryLore.js';
 
-const TABS = ['Stats', 'Quests', 'Bestiary', 'Menu'];
+const TABS = ['Stats', 'Quests', 'Bestiary', 'Menu', 'Settings', 'Medals'];
+
+const ACHIEVEMENTS = [
+  { id: 'first_blood',     label: 'First Blood',     desc: 'Defeat your first enemy.' },
+  { id: 'boss_slayer',     label: 'Boss Slayer',      desc: 'Defeat all 6 dungeon bosses.' },
+  { id: 'lich_vanquished', label: 'Lich Vanquished',  desc: 'Defeat the Lich King.' },
+  { id: 'crafter',         label: 'Crafter',          desc: 'Craft 3 items.' },
+  { id: 'angler',          label: 'Angler',           desc: 'Catch 10 fish.' },
+  { id: 'hoarder',         label: 'Hoarder',          desc: 'Collect 1000 gold total.' },
+  { id: 'explorer',        label: 'Explorer',         desc: 'Visit all 20 maps.' },
+  { id: 'true_hero',       label: 'True Hero',        desc: 'Achieve the true ending.' },
+  { id: 'storyteller',    label: 'Storyteller',      desc: 'Complete all 4 NPC story arcs.' },
+];
 
 export class GameMenu {
   constructor(scene) {
@@ -11,6 +24,7 @@ export class GameMenu {
     this.questPage = 0;
     this.questTotalPages = 1;
     this.menuCursor = 0;
+    this.settingsCursor = 0; // 0=music, 1=sfx
     this._questEntries = [];
     this._pauseQuestIds = [];
 
@@ -62,15 +76,15 @@ export class GameMenu {
     this.tabInactiveBgs = [];
     this.tabTexts = [];
     this.tabHitAreas = [];
-    const tabW = 52;
+    const tabW = 40;
     const tabH = 18;
     const activeTabH = 22;
     const tabY = bookTop - tabH / 2 + 2;
     const activeTabY = bookTop - activeTabH / 2 + 2;
-    const tabStartX = bookX - (TABS.length * (tabW + 6)) / 2 + tabW / 2;
+    const tabStartX = bookX - (TABS.length * (tabW + 4)) / 2 + tabW / 2;
 
     for (let i = 0; i < TABS.length; i++) {
-      const tx = tabStartX + i * (tabW + 6);
+      const tx = tabStartX + i * (tabW + 4);
 
       const activeBg = scene.add.nineslice(
         tx, activeTabY, 'ui-frames', 'tab-orange',
@@ -141,10 +155,9 @@ export class GameMenu {
 
   // --- Menu items for cursor navigation ---
   _getMenuItems() {
-    const isMuted = localStorage.getItem('lizzy-muted') === 'true';
     const items = [
       { label: 'Resume', action: () => this.close() },
-      { label: `Sound: ${isMuted ? 'OFF' : 'ON'}`, action: () => this._toggleSound() },
+      { label: 'Settings', action: () => this._switchTab(4) },
       { label: 'Save & Quit', action: () => this._saveAndQuit() },
     ];
     // Add quest tracking items
@@ -186,8 +199,11 @@ export class GameMenu {
       if (code === Phaser.Input.Keyboard.KeyCodes.W ||
           code === Phaser.Input.Keyboard.KeyCodes.UP) {
         if (this.activeTab === 3) {
-          const items = this._getMenuItems();
           this.menuCursor = Math.max(0, this.menuCursor - 1);
+          this.scene.sfx.play('select');
+          this._render();
+        } else if (this.activeTab === 4) {
+          this.settingsCursor = Math.max(0, this.settingsCursor - 1);
           this.scene.sfx.play('select');
           this._render();
         } else if (this.activeTab === 1 && this.questTotalPages > 1) {
@@ -200,6 +216,10 @@ export class GameMenu {
         if (this.activeTab === 3) {
           const items = this._getMenuItems();
           this.menuCursor = Math.min(items.length - 1, this.menuCursor + 1);
+          this.scene.sfx.play('select');
+          this._render();
+        } else if (this.activeTab === 4) {
+          this.settingsCursor = Math.min(1, this.settingsCursor + 1);
           this.scene.sfx.play('select');
           this._render();
         } else if (this.activeTab === 1 && this.questTotalPages > 1) {
@@ -218,10 +238,12 @@ export class GameMenu {
         return;
       }
 
-      // A/D or Left/Right for tab switching (or quest page flipping)
+      // A/D or Left/Right for tab switching (or quest page flipping / settings adjustment)
       if (code === Phaser.Input.Keyboard.KeyCodes.LEFT ||
           code === Phaser.Input.Keyboard.KeyCodes.A) {
-        if (this.activeTab === 1 && this.questTotalPages > 1) {
+        if (this.activeTab === 4) {
+          this._adjustVolume(-1);
+        } else if (this.activeTab === 1 && this.questTotalPages > 1) {
           this._flipQuestPage(-1);
         } else {
           this._switchTab(Math.max(0, this.activeTab - 1));
@@ -230,7 +252,11 @@ export class GameMenu {
       }
       if (code === Phaser.Input.Keyboard.KeyCodes.RIGHT ||
           code === Phaser.Input.Keyboard.KeyCodes.D) {
-        if (this.activeTab === 1 && this.questTotalPages > 1) {
+        if (this.activeTab === 4) {
+          this._adjustVolume(1);
+        } else if (this.activeTab === 1 && this.questTotalPages > 1) {
+          this._flipQuestPage(1);
+        } else if (this.activeTab === 2) {
           this._flipQuestPage(1);
         } else {
           this._switchTab(Math.min(TABS.length - 1, this.activeTab + 1));
@@ -355,6 +381,8 @@ export class GameMenu {
     else if (this.activeTab === 1) this._renderQuests();
     else if (this.activeTab === 2) this._renderBestiary();
     else if (this.activeTab === 3) this._renderMenu();
+    else if (this.activeTab === 4) this._renderSettings();
+    else if (this.activeTab === 5) this._renderMedals();
   }
 
   _renderStats() {
@@ -368,6 +396,13 @@ export class GameMenu {
       `XP: ${s.xp}/${s.xpToNext}`,
       `Mana: ${Math.floor(s.player.mana)}/${s.player.maxMana}`,
     ];
+    // Pet bond
+    if (s.pet) {
+      const aff = s.petAffection || 0;
+      const hearts = Math.min(5, Math.floor(aff / 10));
+      const emptyHearts = 5 - hearts;
+      lines.push(``, `Pet Bond: ${'♥'.repeat(hearts)}${'♡'.repeat(emptyHearts)}`);
+    }
     this.leftContent.setText(lines.join('\n'));
 
     this.rightTitle.setText('EQUIPMENT');
@@ -379,6 +414,15 @@ export class GameMenu {
       if (arm) equipLines.push(`Arm: ${arm.name}`);
     }
     if (equipLines.length === 0) equipLines.push('None');
+    // Materials
+    const mats = s.materials || {};
+    const matKeys = Object.keys(mats).filter(k => mats[k] > 0);
+    if (matKeys.length > 0) {
+      equipLines.push('', 'Materials:');
+      for (const k of matKeys) {
+        equipLines.push(`${k.replace(/_/g, ' ')}: ${mats[k]}`);
+      }
+    }
     this.rightContent.setText(equipLines.join('\n'));
   }
 
@@ -414,43 +458,40 @@ export class GameMenu {
     this.leftTitle.setText('BESTIARY');
 
     const bestiary = this.scene.bestiary || {};
-    const enemyNames = {
-      skeleton: 'Skeleton',
-      slime: 'Slime',
-      bat: 'Bat',
-      ghost: 'Ghost',
-      scorpion: 'Scorpion',
-      goblin: 'Goblin',
-      orc: 'Orc',
-      skeleton_king: 'Skeleton King',
-      pharaoh: 'Pharaoh',
-      orc_chief: 'Orc Chief',
-    };
-
-    const entries = [];
-    for (const [type, count] of Object.entries(bestiary)) {
-      const name = enemyNames[type] || type;
-      entries.push(`${name}: ${count}`);
-    }
+    const entries = Object.entries(bestiary).filter(([, count]) => count > 0);
 
     if (entries.length === 0) {
       this.leftContent.setText('No enemies\ndefeated yet.\n\nDefeat monsters\nto fill this page.');
       return;
     }
 
-    // Split into left and right columns
-    const half = Math.ceil(entries.length / 2);
-    this.leftContent.setText(entries.slice(0, half).join('\n'));
+    // Paginate: 4 entries per spread (2 left, 2 right)
+    const perSpread = 4;
+    const totalPages = Math.ceil(entries.length / perSpread);
+    const page = (this.questPage || 0) % Math.max(1, totalPages);
+    const startIdx = page * perSpread;
+    const pageEntries = entries.slice(startIdx, startIdx + perSpread);
+    const leftEntries = pageEntries.slice(0, 2);
+    const rightEntries = pageEntries.slice(2, 4);
 
-    if (entries.length > half) {
-      this.rightTitle.setText('');
-      this.rightContent.setText(entries.slice(half).join('\n'));
-      this.rightContent.setY(this.pageTop + 16);
-    }
+    const formatEntry = ([type, count]) => {
+      const lore = BESTIARY_LORE[type] || {};
+      const name = lore.name || type.replace(/_/g, ' ');
+      const desc = lore.description || 'A dangerous foe.';
+      const weak = lore.weakness ? `Weak: ${lore.weakness}` : '';
+      return `${name} x${count}\n${desc}${weak ? '\n' + weak : ''}`;
+    };
+
+    this.leftTitle.setText('BESTIARY');
+    this.leftContent.setText(leftEntries.map(formatEntry).join('\n\n'));
+
+    this.rightTitle.setText('');
+    this.rightContent.setText(rightEntries.length > 0 ? rightEntries.map(formatEntry).join('\n\n') : '');
+    this.rightContent.setY(this.pageTop + 16);
 
     // Total kills
     const total = Object.values(bestiary).reduce((a, b) => a + b, 0);
-    this.pageIndicator.setText(`Total: ${total} defeated`);
+    this.pageIndicator.setText(`${total} defeated | Page ${page + 1}/${Math.max(1, totalPages)}`);
   }
 
   _renderMenu() {
@@ -496,5 +537,73 @@ export class GameMenu {
       lines.push(`  ${e.detail}`);
     }
     return lines.join('\n');
+  }
+
+  _renderSettings() {
+    this.leftTitle.setText('SETTINGS');
+
+    const musicVol = parseInt(localStorage.getItem('lizzy-music-vol') ?? '7', 10);
+    const sfxVol = parseInt(localStorage.getItem('lizzy-sfx-vol') ?? '8', 10);
+
+    const _bar = (val) => {
+      const filled = Math.round(val);
+      return '[' + '='.repeat(filled) + '-'.repeat(10 - filled) + ']';
+    };
+
+    const lines = [
+      `${this.settingsCursor === 0 ? '>' : ' '} Music Vol`,
+      `  ${_bar(musicVol)} ${musicVol}`,
+      '',
+      `${this.settingsCursor === 1 ? '>' : ' '} SFX Vol`,
+      `  ${_bar(sfxVol)} ${sfxVol}`,
+    ];
+    this.leftContent.setText(lines.join('\n'));
+
+    this.rightTitle.setText('CONTROLS');
+    this.rightContent.setText('W/S: select row\nLeft/Right: adjust\nA/D: also adjust');
+  }
+
+  _renderMedals() {
+    this.leftTitle.setText('MEDALS');
+    const achievements = this.scene.achievements || {};
+    const earned = ACHIEVEMENTS.filter(a => achievements[a.id]);
+    const locked = ACHIEVEMENTS.filter(a => !achievements[a.id]);
+
+    const leftEntries = ACHIEVEMENTS.slice(0, 4);
+    const rightEntries = ACHIEVEMENTS.slice(4);
+
+    const fmt = (ach) => {
+      const done = !!achievements[ach.id];
+      const prefix = done ? '\u2713' : '\u25cb';
+      const color = done ? '' : '';
+      return `${prefix} ${ach.label}\n  ${ach.desc}`;
+    };
+
+    this.leftContent.setText(leftEntries.map(fmt).join('\n\n'));
+    this.rightTitle.setText('');
+    this.rightContent.setText(rightEntries.map(fmt).join('\n\n'));
+    this.rightContent.setY(this.pageTop + 16);
+
+    const total = earned.length;
+    this.pageIndicator.setText(`${total}/${ACHIEVEMENTS.length} earned`);
+  }
+
+  _adjustVolume(dir) {
+    const keys = ['lizzy-music-vol', 'lizzy-sfx-vol'];
+    const key = keys[this.settingsCursor];
+    const defaults = [7, 8];
+    let val = parseInt(localStorage.getItem(key) ?? String(defaults[this.settingsCursor]), 10);
+    val = Math.max(0, Math.min(10, val + dir));
+    localStorage.setItem(key, String(val));
+
+    const scene = this.scene;
+    if (this.settingsCursor === 0) {
+      const music = scene.music;
+      if (music) music.setVolume(val / 10);
+    } else {
+      const sfx = scene.sfx;
+      if (sfx) sfx.setVolume(val / 10);
+    }
+    this._render();
   }
 }

@@ -2,16 +2,27 @@
 export class SFX {
   constructor() {
     this.ctx = null;
+    this.masterGain = null;
     this.muted = false;
   }
 
   init() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    const saved = localStorage.getItem('lizzy-sfx-vol');
+    this.masterGain.gain.setValueAtTime(saved !== null ? saved / 10 : 0.8, this.ctx.currentTime);
+    this.masterGain.connect(this.ctx.destination);
   }
 
   ensureContext() {
     if (!this.ctx) this.init();
     if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  setVolume(level) {
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(level, this.ctx.currentTime, 0.01);
+    }
   }
 
   play(name) {
@@ -32,7 +43,7 @@ export class SFX {
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain || this.ctx.destination);
     osc.start(t);
     osc.stop(t + dur + 0.01);
   }
@@ -62,7 +73,7 @@ export class SFX {
     gain.gain.setValueAtTime(0.12, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
     noise.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain || this.ctx.destination);
     noise.start(t);
     this._osc('square', 200, 80, 0.06, 0.08);
   }
@@ -96,7 +107,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.1, t + i * 0.1);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.12);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.1 + 0.15);
     });
@@ -115,7 +126,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.1, t + i * 0.12);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.18);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.12 + 0.2);
     });
@@ -155,7 +166,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.07, t + i * 0.08);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.2);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.08 + 0.25);
     });
@@ -174,7 +185,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.06, t + i * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.12);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.06 + 0.15);
     });
@@ -199,7 +210,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.08, t + i * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.1);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.06 + 0.12);
     });
@@ -218,7 +229,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.08, t + i * 0.07);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.15);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.07 + 0.18);
     });
@@ -249,7 +260,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.08, t + i * 0.08);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.2);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.08 + 0.25);
     });
@@ -268,7 +279,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.12, t + i * 0.1);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.15);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.1 + 0.18);
     });
@@ -288,7 +299,7 @@ export class SFX {
     gain.gain.setValueAtTime(0.1, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
     noise.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain || this.ctx.destination);
     noise.start(t);
   }
 
@@ -318,7 +329,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.08, t + 0.08 + i * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08 + i * 0.06 + 0.1);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t + 0.08);
       osc.stop(t + 0.08 + i * 0.06 + 0.12);
     });
@@ -337,7 +348,7 @@ export class SFX {
     gain.gain.setValueAtTime(0.1, t + 0.1);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain || this.ctx.destination);
     osc.start(t + 0.1);
     osc.stop(t + 0.25);
   }
@@ -355,7 +366,7 @@ export class SFX {
       gain.gain.setValueAtTime(0.09, t + i * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.12);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
       osc.start(t);
       osc.stop(t + i * 0.06 + 0.15);
     });
@@ -379,7 +390,7 @@ export class SFX {
     gain.gain.setValueAtTime(0.1, t + 0.1);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain || this.ctx.destination);
     osc.start(t + 0.1);
     osc.stop(t + 0.2);
   }

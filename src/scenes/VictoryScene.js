@@ -8,6 +8,9 @@ export class VictoryScene extends Phaser.Scene {
 
   init(data) {
     this.stats = data || {};
+    this.trueEnding = data && data.trueEnding ? true : false;
+    this.lichEnding = data && data.lichEnding ? true : false;
+    this.achievements = data && data.achievements ? data.achievements : {};
   }
 
   create() {
@@ -15,7 +18,7 @@ export class VictoryScene extends Phaser.Scene {
     const h = this.cameras.main.height;
     const sfx = this.registry.get('sfx');
 
-    this.cameras.main.setBackgroundColor('#0a0a1a');
+    this.cameras.main.setBackgroundColor(this.lichEnding ? '#0a0010' : '#0a0a1a');
     this.cameras.main.fadeIn(1000, 0, 0, 0);
 
     // Play victory music
@@ -62,10 +65,12 @@ export class VictoryScene extends Phaser.Scene {
 
     // "VICTORY" text
     this.time.delayedCall(500, () => {
-      const victory = this.add.text(w / 2, 20, 'VICTORY', {
+      const victoryLabel = this.lichEnding ? 'LICH KING DEFEATED!' : 'VICTORY';
+      const victoryColor = this.lichEnding ? '#dd88ff' : '#ffdd00';
+      const victory = this.add.text(w / 2, 20, victoryLabel, {
         fontSize: '18px',
         fontFamily: 'Arial, sans-serif',
-        color: '#ffdd00',
+        color: victoryColor,
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 4,
@@ -98,19 +103,46 @@ export class VictoryScene extends Phaser.Scene {
 
     // Story text
     this.time.delayedCall(2000, () => {
-      const storyLines = [
-        'With the Skeleton King slain,',
-        'the Pharaoh\'s curse lifted,',
-        'and the Orc Chief vanquished,',
-        'peace returns to the land.',
-        '',
-        'Lizzy, the legendary warrior,',
-        'has saved everyone.',
-      ];
+      let storyLines;
+      let storyColor;
+      if (this.lichEnding) {
+        storyLines = [
+          'Six dungeons cleared.',
+          'Six bosses defeated:',
+          'Skeleton King. Pharaoh.',
+          'Orc Chief. Ice Witch.',
+          'Sea Serpent. Death Knight.',
+          '',
+          'And then... the Lich King.',
+          'Magister Voleth, Undying No More.',
+          '',
+          'Greendale is free at last.',
+        ];
+        storyColor = '#dd88ff';
+        if (this.trueEnding) {
+          storyLines.push('', 'Three Star Fragments gathered.', 'The ancient seal crumbles.', 'A legend is born.', 'True Hero of Greendale.');
+          storyColor = '#ffdd88';
+        }
+      } else {
+        storyLines = [
+          'With the Skeleton King slain,',
+          'the Pharaoh\'s curse lifted,',
+          'and the Orc Chief vanquished,',
+          'peace returns to the land.',
+          '',
+          'Lizzy, the legendary warrior,',
+          'has saved everyone.',
+        ];
+        storyColor = '#ccccdd';
+        if (this.trueEnding) {
+          storyLines.push('', 'You discovered all three', 'Star Fragments...', 'The ancient seal is broken.', 'A new adventure awaits.');
+          storyColor = '#ffdd88';
+        }
+      }
       const story = this.add.text(w / 2, 90, storyLines.join('\n'), {
         fontSize: '12px',
         fontFamily: 'Arial, sans-serif',
-        color: '#ccccdd',
+        color: storyColor,
         align: 'center',
         lineSpacing: 4,
       }).setOrigin(0.5, 0).setAlpha(0);
@@ -137,6 +169,27 @@ export class VictoryScene extends Phaser.Scene {
       this.tweens.add({ targets: statsText, alpha: 1, duration: 600 });
     });
 
+    // Achievements earned
+    this.time.delayedCall(4800, () => {
+      const earned = Object.keys(this.achievements || {});
+      if (earned.length === 0) return;
+      const ACHIEVEMENT_LABELS = {
+        first_blood: 'First Blood', boss_slayer: 'Boss Slayer',
+        lich_vanquished: 'Lich Vanquished', crafter: 'Crafter',
+        angler: 'Angler', hoarder: 'Hoarder',
+        explorer: 'Explorer', true_hero: 'True Hero',
+      };
+      const lines = ['— Achievements —', ...earned.map(id => `✓ ${ACHIEVEMENT_LABELS[id] || id}`)];
+      const achText = this.add.text(w / 2, 175, lines.join('\n'), {
+        fontSize: '10px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffdd00',
+        align: 'center',
+        lineSpacing: 2,
+      }).setOrigin(0.5, 0).setAlpha(0);
+      this.tweens.add({ targets: achText, alpha: 1, duration: 600 });
+    });
+
     // Credits
     this.time.delayedCall(5500, () => {
       const credits = this.add.text(w / 2, 186, [
@@ -155,18 +208,14 @@ export class VictoryScene extends Phaser.Scene {
       this.tweens.add({ targets: credits, alpha: 1, duration: 600 });
     });
 
-    // Return to title prompt
+    // Return to title + New Game+ prompt
     this.time.delayedCall(7000, () => {
-      const prompt = this.add.text(w / 2, h - 14, 'Press ENTER to return', {
-        fontSize: '12px',
+      const prompt = this.add.text(w / 2, h - 20, '[ENTER] Main Menu    [N] New Game+', {
+        fontSize: '11px',
         fontFamily: 'Arial, sans-serif',
         color: '#ffffff',
       }).setOrigin(0.5).setAlpha(0);
-      this.tweens.add({
-        targets: prompt,
-        alpha: 1,
-        duration: 400,
-      });
+      this.tweens.add({ targets: prompt, alpha: 1, duration: 400 });
       this.tweens.add({
         targets: prompt,
         alpha: { from: 1, to: 0.3 },
@@ -176,11 +225,29 @@ export class VictoryScene extends Phaser.Scene {
         delay: 400,
       });
 
+      this._ngpKeyAdded = false;
       this.input.keyboard.once('keydown-ENTER', () => {
+        if (this._ngpKeyAdded) return;
         if (sfx) sfx.play('select');
         this.cameras.main.fadeOut(800, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
           this.scene.start('Title');
+        });
+      });
+
+      this.input.keyboard.once('keydown-N', () => {
+        this._ngpKeyAdded = true;
+        if (sfx) sfx.play('questAccept');
+        this.cameras.main.fadeOut(800, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          if (this.registry.get('music')) this.registry.get('music').stop();
+          this.scene.start('Game', {
+            isNewGamePlus: true,
+            level: 3,
+            gold: 50,
+            equipment: { weapon: 'wooden_sword', armor: 'cloth_armor' },
+            achievements: this.achievements,
+          });
         });
       });
     });

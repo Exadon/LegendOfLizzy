@@ -281,9 +281,28 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
   }
 
   _getReputationGreeting(gameScene) {
+    // Affection-tier greetings (Phase 14)
+    const affection = gameScene.npcAffection?.[this.npcId] || 0;
+    if (affection >= 90) {
+      return 'Lizzy — hero of Greendale\nand my dearest friend.';
+    }
+    if (affection >= 30) {
+      return 'You\'re becoming a true\nfriend, Lizzy.';
+    }
+
     const level = gameScene.level || 1;
     const bossKilled = gameScene.questManager?.getQuest('clear_cave')?.state === 'completed';
     const questsDone = gameScene.questManager ? gameScene.questManager.getAllQuests().filter(q => q.state === 'completed').length : 0;
+
+    const lichKilled = gameScene.questManager?.getQuest('defeat_lich')?.state === 'completed';
+    if (lichKilled) {
+      const lines = [
+        'They say you defeated the\nLich King... I can barely believe it.',
+        'The Lich King is gone!\nYou\'re a legend, Lizzy!',
+        'Voleth the Undying... undone.\nHistory will remember you!',
+      ];
+      return lines[Math.floor(Math.random() * lines.length)];
+    }
 
     if (bossKilled) {
       const lines = [

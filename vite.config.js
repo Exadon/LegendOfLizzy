@@ -7,8 +7,20 @@ export default defineConfig({
     open: true,
     allowedHosts: ['.railway.app'],
   },
+  resolve: {
+    alias: {
+      phaser: 'phaser/dist/phaser.js',
+    },
+  },
   build: {
     outDir: 'dist',
     assetsInlineLimit: 0,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          phaser: ['phaser'],
+        },
+      },
+    },
   },
 });

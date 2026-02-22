@@ -197,6 +197,28 @@ export class MapOverlay {
       this._addLabel(ex, ey + 6, e.label, '#ff8888', 8);
     }
 
+    // New Phase 12 entrances
+    // Mountain (top, snow-blue)
+    mapGfx.fillStyle(0x88aacc);
+    { const ex = mapX + (520 / worldW) * mapW; const ey = mapY + 4;
+      mapGfx.fillTriangle(ex, ey - 3, ex - 4, ey + 4, ex + 4, ey + 4);
+      this._addLabel(ex, ey + 7, 'Mountain', '#aaddff', 8); }
+    // Harbor (right side, blue)
+    mapGfx.fillStyle(0x2255cc);
+    { const ex = mapX + (920 / worldW) * mapW; const ey = mapY + (700 / worldH) * mapH;
+      mapGfx.fillTriangle(ex, ey - 4, ex - 4, ey + 3, ex + 4, ey + 3);
+      this._addLabel(ex, ey + 6, 'Harbor', '#88aaff', 8); }
+    // Ruins (left side, grey)
+    mapGfx.fillStyle(0x555566);
+    { const ex = mapX + (40 / worldW) * mapW; const ey = mapY + (700 / worldH) * mapH;
+      mapGfx.fillTriangle(ex, ey - 4, ex - 4, ey + 3, ex + 4, ey + 3);
+      this._addLabel(ex, ey + 6, 'Ruins', '#aaaacc', 8); }
+    // Lich Tower (center, purple)
+    mapGfx.fillStyle(0x8800cc);
+    { const ex = mapX + (520 / worldW) * mapW; const ey = mapY + (360 / worldH) * mapH;
+      mapGfx.fillTriangle(ex, ey - 4, ex - 4, ey + 3, ex + 4, ey + 3);
+      this._addLabel(ex, ey + 6, 'Lich Tower', '#dd88ff', 8); }
+
     // Teleport stone marker (blue diamond)
     const ts = MAPS.overworld.teleportStone;
     if (ts) {
@@ -315,6 +337,102 @@ export class MapOverlay {
     this.titleText.setText('WOODHAVEN');
   }
 
+  _drawMountainMap(worldW, worldH) {
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
+    mapGfx.clear();
+    mapGfx.fillStyle(0xccddee); // Snow white-blue
+    mapGfx.fillRect(mapX, mapY, mapW, mapH);
+    // Peaks
+    mapGfx.fillStyle(0x99aabb);
+    mapGfx.fillTriangle(mapX + mapW * 0.3, mapY + mapH * 0.1, mapX + mapW * 0.1, mapY + mapH * 0.6, mapX + mapW * 0.5, mapY + mapH * 0.6);
+    mapGfx.fillTriangle(mapX + mapW * 0.7, mapY + mapH * 0.05, mapX + mapW * 0.5, mapY + mapH * 0.5, mapX + mapW * 0.9, mapY + mapH * 0.5);
+    // Cave entrance
+    mapGfx.fillStyle(0x3a2a1a);
+    mapGfx.fillRect(mapX + mapW * 0.4, mapY + 4, 12, 8);
+    this._addLabel(mapX + mapW * 0.46, mapY + 15, 'Cave', '#aaddff', 8);
+    // Exit
+    mapGfx.fillStyle(0xcc4444);
+    mapGfx.fillTriangle(mapX + mapW * 0.5, mapY + mapH - 3, mapX + mapW * 0.46, mapY + mapH - 9, mapX + mapW * 0.54, mapY + mapH - 9);
+    this.titleText.setText('FROSTPEAK MOUNTAIN');
+  }
+
+  _drawHarborMap(worldW, worldH) {
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
+    mapGfx.clear();
+    mapGfx.fillStyle(0xddbb88); // Sand
+    mapGfx.fillRect(mapX, mapY, mapW, mapH);
+    // Water at top and bottom
+    mapGfx.fillStyle(0x3366bb);
+    mapGfx.fillRect(mapX, mapY, mapW, mapH * 0.15);
+    mapGfx.fillRect(mapX, mapY + mapH * 0.85, mapW, mapH * 0.15);
+    // Dock
+    mapGfx.fillStyle(0xaa8844);
+    mapGfx.fillRect(mapX + mapW * 0.35, mapY + mapH * 0.1, 10, mapH * 0.3);
+    // Cave entrance
+    mapGfx.fillStyle(0x3a2a1a);
+    mapGfx.fillRect(mapX + mapW * 0.55, mapY + mapH * 0.12, 10, 7);
+    this._addLabel(mapX + mapW * 0.6, mapY + mapH * 0.12 + 10, 'Sea Cave', '#88aaff', 8);
+    this.titleText.setText('SALTWIND HARBOR');
+  }
+
+  _drawRuinsMap(worldW, worldH) {
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
+    mapGfx.clear();
+    mapGfx.fillStyle(0x555566); // Dark stone
+    mapGfx.fillRect(mapX, mapY, mapW, mapH);
+    // Ruined walls (darker rectangles)
+    mapGfx.fillStyle(0x333344);
+    mapGfx.fillRect(mapX + mapW * 0.1, mapY + mapH * 0.15, mapW * 0.25, 4);
+    mapGfx.fillRect(mapX + mapW * 0.65, mapY + mapH * 0.3, mapW * 0.2, 4);
+    mapGfx.fillRect(mapX + mapW * 0.3, mapY + mapH * 0.6, mapW * 0.15, 4);
+    // Dungeon entrance
+    mapGfx.fillStyle(0x3a2a1a);
+    mapGfx.fillRect(mapX + mapW * 0.45, mapY + 4, 10, 7);
+    this._addLabel(mapX + mapW * 0.5, mapY + 14, 'Dungeon', '#aaaacc', 8);
+    this.titleText.setText('ANCIENT RUINS');
+  }
+
+  _drawLichTowerMap(worldW, worldH) {
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
+    mapGfx.clear();
+    mapGfx.fillStyle(0x0a0010); // Void black
+    mapGfx.fillRect(mapX, mapY, mapW, mapH);
+    // Tower
+    mapGfx.fillStyle(0x220033);
+    mapGfx.fillRect(mapX + mapW * 0.35, mapY + mapH * 0.1, mapW * 0.3, mapH * 0.8);
+    // Tower top
+    mapGfx.fillStyle(0x440055);
+    mapGfx.fillTriangle(mapX + mapW * 0.5, mapY + 4, mapX + mapW * 0.33, mapY + mapH * 0.15, mapX + mapW * 0.67, mapY + mapH * 0.15);
+    // Purple glow
+    mapGfx.fillStyle(0x9900cc, 0.3);
+    mapGfx.fillCircle(mapX + mapW * 0.5, mapY + mapH * 0.5, 12);
+    this._addLabel(mapX + mapW * 0.5, mapY + mapH * 0.5 + 16, '???', '#dd88ff', 8);
+    this.titleText.setText('LICH TOWER');
+  }
+
+  _drawFogOfWar(mapName, worldW, worldH) {
+    const visited = new Set(this.scene.visitedChunks?.[mapName] || []);
+    if (visited.size === 0) return;
+
+    const chunkSize = mapName === 'overworld' ? 128 : 64;
+    const chunksX = Math.ceil(worldW / chunkSize);
+    const chunksY = Math.ceil(worldH / chunkSize);
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
+
+    for (let cy = 0; cy < chunksY; cy++) {
+      for (let cx = 0; cx < chunksX; cx++) {
+        if (!visited.has(`${cx},${cy}`)) {
+          const rx = mapX + (cx * chunkSize / worldW) * mapW;
+          const ry = mapY + (cy * chunkSize / worldH) * mapH;
+          const rw = (chunkSize / worldW) * mapW + 1;
+          const rh = (chunkSize / worldH) * mapH + 1;
+          mapGfx.fillStyle(0x111122, 0.55);
+          mapGfx.fillRect(rx, ry, rw, rh);
+        }
+      }
+    }
+  }
+
   _drawGenericMap(mapName) {
     const { mapGfx, mapX, mapY, mapW, mapH } = this;
     mapGfx.clear();
@@ -323,6 +441,8 @@ export class MapOverlay {
       cave: 0x3a2a1a, boss_room: 0x3a2a1a,
       desert_temple: 0xddcc88, pharaoh_chamber: 0xddcc88,
       forest_boss: 0x2a6a2a,
+      mountain_cave: 0x3a2a1a, sea_cave: 0x001133,
+      ruins_dungeon: 0x222233,
     };
     mapGfx.fillStyle(floorColors[mapName] || 0x555555);
     mapGfx.fillRect(mapX, mapY, mapW, mapH);
@@ -333,6 +453,8 @@ export class MapOverlay {
       forest_boss: 'FOREST BOSS', house_interior: 'HOUSE',
       shop_interior: 'SHOP', inn_interior: 'INN',
       town2_shop: 'SHOP', town2_inn: 'INN',
+      mountain_cave: 'MOUNTAIN CAVE', sea_cave: 'SEA CAVE',
+      ruins_dungeon: 'RUINS DUNGEON',
     };
     this.titleText.setText(names[mapName] || 'MAP');
   }
@@ -351,8 +473,22 @@ export class MapOverlay {
       this._drawForestMap(worldW, worldH);
     } else if (mapName === 'town2') {
       this._drawTown2Map(worldW, worldH);
+    } else if (mapName === 'mountain') {
+      this._drawMountainMap(worldW, worldH);
+    } else if (mapName === 'harbor') {
+      this._drawHarborMap(worldW, worldH);
+    } else if (mapName === 'ruins') {
+      this._drawRuinsMap(worldW, worldH);
+    } else if (mapName === 'lich_tower') {
+      this._drawLichTowerMap(worldW, worldH);
     } else {
       this._drawGenericMap(mapName);
+    }
+
+    // Fog-of-war overlay for explored maps
+    const fogMaps = ['overworld', 'forest', 'town2', 'mountain', 'harbor', 'ruins'];
+    if (fogMaps.includes(mapName)) {
+      this._drawFogOfWar(mapName, worldW, worldH);
     }
 
     // Update player position

@@ -198,7 +198,14 @@ export class Music {
   init(audioCtx) {
     this.ctx = audioCtx;
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+    // Apply saved volume preference (default 7/10 = 0.7)
+    const isMuted = typeof localStorage !== 'undefined' && localStorage.getItem('lizzy-muted') === 'true';
+    if (isMuted) {
+      this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+    } else {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('lizzy-music-vol') : null;
+      this.masterGain.gain.setValueAtTime(saved !== null ? parseInt(saved, 10) / 10 : 0.7, this.ctx.currentTime);
+    }
     this.masterGain.connect(this.ctx.destination);
   }
 
@@ -229,9 +236,12 @@ export class Music {
     this.beatCount = 0;
     this.nextNoteTime = this.ctx.currentTime + 0.1;
 
-    // Fade in
+    // Fade in to saved volume level
+    const isMuted = typeof localStorage !== 'undefined' && localStorage.getItem('lizzy-muted') === 'true';
+    const savedVol = typeof localStorage !== 'undefined' ? localStorage.getItem('lizzy-music-vol') : null;
+    const targetVol = isMuted ? 0 : (savedVol !== null ? parseInt(savedVol, 10) / 10 : 0.7);
     this.masterGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
-    this.masterGain.gain.linearRampToValueAtTime(1.0, this.ctx.currentTime + 1.5);
+    this.masterGain.gain.linearRampToValueAtTime(targetVol, this.ctx.currentTime + 1.5);
 
     this._schedule();
   }
@@ -258,6 +268,12 @@ export class Music {
     this.activeNodes = [];
     this.currentTrack = null;
     this.currentTrackName = null;
+  }
+
+  setVolume(level) {
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(level, this.ctx.currentTime, 0.01);
+    }
   }
 
   fadeOut(duration = 1.5) {

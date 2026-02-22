@@ -23,6 +23,13 @@ import { FishingMinigame } from '../ui/FishingMinigame.js';
 import { EquipmentManager, EQUIPMENT } from '../systems/Equipment.js';
 import { Chest } from '../entities/Chest.js';
 import { Pet } from '../entities/Pet.js';
+import { IceWitch } from '../entities/IceWitch.js';
+import { SeaSerpent } from '../entities/SeaSerpent.js';
+import { DeathKnight } from '../entities/DeathKnight.js';
+import { LichKing } from '../entities/LichKing.js';
+import { GoblinArcher } from '../entities/GoblinArcher.js';
+import { MATERIAL_DROPS } from '../data/CraftingRecipes.js';
+import { CRAFTING_RECIPES } from '../data/CraftingRecipes.js';
 
 // Unified enemy reward table — used by both sword kills and magic kills
 const ENEMY_REWARDS = {
@@ -33,7 +40,27 @@ const ENEMY_REWARDS = {
   scorpion: { gold: 6, xp: 18 },
   goblin: { gold: 4, xp: 12 },
   orc: { gold: 7, xp: 20 },
+  goblin_archer: { gold: 6, xp: 18 },
+  yeti: { gold: 10, xp: 30 },
+  ice_skeleton: { gold: 5, xp: 15 },
+  pirate_ghost: { gold: 8, xp: 25 },
+  sea_wraith: { gold: 8, xp: 25 },
+  zombie: { gold: 4, xp: 12 },
+  undead_knight: { gold: 9, xp: 28 },
 };
+
+// Achievement definitions (shared with GameMenu)
+const ACHIEVEMENTS = [
+  { id: 'first_blood',     label: 'First Blood',     desc: 'Defeat your first enemy.' },
+  { id: 'boss_slayer',     label: 'Boss Slayer',      desc: 'Defeat all 6 dungeon bosses.' },
+  { id: 'lich_vanquished', label: 'Lich Vanquished',  desc: 'Defeat the Lich King.' },
+  { id: 'crafter',         label: 'Crafter',          desc: 'Craft 3 items.' },
+  { id: 'angler',          label: 'Angler',           desc: 'Catch 10 fish.' },
+  { id: 'hoarder',         label: 'Hoarder',          desc: 'Collect 1000 gold total.' },
+  { id: 'explorer',        label: 'Explorer',         desc: 'Visit all 20 maps.' },
+  { id: 'true_hero',       label: 'True Hero',        desc: 'Achieve the true ending.' },
+  { id: 'storyteller',    label: 'Storyteller',      desc: 'Complete all 4 NPC story arcs.' },
+];
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -61,6 +88,24 @@ export class GameScene extends Phaser.Scene {
     this.savedEscortNpcId = data.escortNpcId || null;
     this.savedPlayerAttackBonus = data.playerAttackBonus || 0;
     this.savedUnlockedTeleports = data.unlockedTeleports || [];
+    this.isNewGamePlus = data.isNewGamePlus || false;
+    this.savedStarFragments = data.starFragments || 0;
+    this.savedMaterials = data.materials || {};
+    this.savedDarkSeals = data.darkSeals || 0;
+    this.savedPetAffection = data.petAffection || 0;
+    this.savedVisitedChunks = data.visitedChunks || {};
+    this.savedLichTowerUnlocked = data.lichTowerUnlocked || false;
+    this.savedAchievements = data.achievements || {};
+    this.savedCraftCount = data._craftCount || 0;
+    this.savedFishCount = data._fishCount || 0;
+    this.savedTotalGoldEarned = data._totalGoldEarned || 0;
+    this.savedWeather = data.weather || 'clear';
+    this.savedRegenBonus = data._regenBonus || 0;
+    this.savedNpcAffection = data.npcAffection || {};
+    this.savedStoryChoices = data.storyChoices || {};
+    this.savedNpcGiftGiven = data.npcGiftGiven || {};
+    this.savedFishLuckBonus = data.fishLuckBonus || false;
+    this.savedJackTreeChoice = data.jackTreeChoice || null;
     // Prevent instant door re-trigger when spawning near an exit
     this._doorCooldown = !!data.mapData;
   }
@@ -74,6 +119,10 @@ export class GameScene extends Phaser.Scene {
     this.isTemple = map.floorTile === 'sand-floor';
     this.isForest = map.name === 'forest' || map.name === 'forest_boss';
     this.isTown2 = map.name === 'town2';
+    this.isMountain = map.name === 'mountain' || map.name === 'mountain_cave';
+    this.isHarbor = map.name === 'harbor' || map.name === 'sea_cave';
+    this.isRuins = map.name === 'ruins' || map.name === 'ruins_dungeon';
+    this.isLichTower = map.name === 'lich_tower';
 
     // SFX
     this.sfx = this.registry.get('sfx') || new SFX();
@@ -83,10 +132,7 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('music', new Music());
     }
     this.music = this.registry.get('music');
-    // Apply saved mute preference to music
-    if (localStorage.getItem('lizzy-muted') === 'true' && this.music && this.music.masterGain && this.music.ctx) {
-      this.music.masterGain.gain.setValueAtTime(0, this.music.ctx.currentTime);
-    }
+    // Volume/mute preferences are applied by Music.init() when context is created
 
     // Quest system
     this.questManager = new QuestManager();
@@ -122,6 +168,11 @@ export class GameScene extends Phaser.Scene {
       this.spawnTown2NPCs();
     }
 
+    // New biome NPCs
+    if (map.name === 'mountain') this.spawnMountainNPCs();
+    if (map.name === 'harbor') this.spawnHarborNPCs();
+    if (map.name === 'ruins') this.spawnRuinsNPCs();
+
     // Enemies
     this.enemies = this.add.group();
     if (this.isOverworld) {
@@ -138,11 +189,26 @@ export class GameScene extends Phaser.Scene {
     if (map.hasBoss) {
       this.spawnBoss(map.bossType);
       this.time.delayedCall(800, () => {
-        const bossNames = { pharaoh: 'The Pharaoh', skeleton_king: 'The Skeleton King', orc_chief: 'The Orc Chief' };
+        const bossNames = {
+          pharaoh: 'The Pharaoh', skeleton_king: 'The Skeleton King', orc_chief: 'The Orc Chief',
+          ice_witch: 'The Ice Witch', sea_serpent: 'The Sea Serpent',
+          death_knight: 'The Death Knight', lich_king: 'THE LICH KING',
+        };
         const bossName = bossNames[map.bossType] || 'A powerful foe';
         this.showNotification(`${bossName} awaits...`);
         this.cameras.main.shake(200, 0.008);
       });
+    }
+
+    // Arena crystal (boss_room, after Skeleton King defeated)
+    this._arenaWave = 0;
+    this._arenaActive = false;
+    this._arenaCrystal = null;
+    if (map.arenaProps) {
+      const caveQuest = this.questManager.getQuest('clear_cave');
+      if (caveQuest && (caveQuest.state === 'completed' || caveQuest.state === 'ready')) {
+        this._spawnArenaCrystal(map.arenaProps);
+      }
     }
 
     // Chickens (overworld only)
@@ -176,6 +242,14 @@ export class GameScene extends Phaser.Scene {
     // Interaction key
     this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
+    // Gamepad menu event (from Player.js)
+    this.events.on('gamepad-menu', () => {
+      if (!this.gameMenu.visible && !this.inDialogue && !this._shopActive && !this.overlayOpen) {
+        this.sfx.play('select');
+        this.gameMenu.open(0);
+      }
+    });
+
     // Map and quest book keys
     this.mapKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.petBarkKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -190,15 +264,22 @@ export class GameScene extends Phaser.Scene {
     this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
     this.magicProjectiles = this.add.group();
 
-    // Spell system: Fireball (lv1), Ice Bolt (lv3), Heal (lv5)
+    // Spell system: Fireball (lv1), Ice Bolt (lv3), Heal (lv5), Chain Lightning (lv7)
     this.spells = [
-      { name: 'Fireball', color: 0xff6622, manaCost: 3, damage: 3, lifetime: 600, minLevel: 1 },
-      { name: 'Ice Bolt', color: 0x44aaff, manaCost: 4, damage: 2, lifetime: 1000, minLevel: 3, slow: true },
+      { name: 'Fireball', color: 0xff6622, manaCost: 3, damage: 3, lifetime: 600, minLevel: 1, element: 'fire' },
+      { name: 'Ice Bolt', color: 0x44aaff, manaCost: 4, damage: 2, lifetime: 1000, minLevel: 3, slow: true, element: 'ice' },
       { name: 'Heal', color: 0x44ff44, manaCost: 7, healAmount: 2, cooldown: 3000, minLevel: 5, isHeal: true },
+      { name: 'Chain Lightning', color: 0xffee22, manaCost: 4, damage: 3, minLevel: 7, isLightning: true, element: 'lightning' },
     ];
     this.currentSpellIndex = 0;
     this._healCooldown = 0;
     this._spellCooldown = 0;
+
+    // Arrow group for GoblinArcher projectiles
+    this.arrowGroup = this.add.group();
+
+    // Elemental arrow key
+    this._rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
     // Inventory hotbar keys
     this.itemKeys = [
@@ -354,6 +435,60 @@ export class GameScene extends Phaser.Scene {
     // Fetch quest: spawn collectible if active and in correct map
     this._spawnFetchItems();
 
+    // Auto-complete 'visit' quests targeting the current map (Phase 14)
+    this.time.delayedCall(0, () => {
+      const mapName = this.mapData.name;
+      this.questManager.getActiveQuests().forEach(q => {
+        if (q.objective?.visitMap === mapName && q.state === 'active') {
+          q.progress = 1;
+          q.state = 'ready';
+          this.updateQuestTracker();
+        }
+      });
+      // Forest healing from Jack's purify choice
+      if (this.isForest && this._jackTreeChoice === 'purify') {
+        this.time.delayedCall(800, () => {
+          const healed = Math.min(1, this.player.maxHealth - this.player.health);
+          if (healed > 0) {
+            this.player.health += healed;
+            this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+          }
+          const ft = this.add.text(this.player.x, this.player.y - 24, 'Ancient tree: +1 HP', {
+            fontSize: '8px', fontFamily: 'Arial, sans-serif',
+            color: '#44ff88', stroke: '#000000', strokeThickness: 2,
+          }).setOrigin(0.5).setDepth(9999);
+          this.tweens.add({ targets: ft, y: ft.y - 20, alpha: 0, duration: 1800, onComplete: () => ft.destroy() });
+          this.showNotification('The ancient tree hums with energy.');
+        });
+      }
+    });
+
+    // Star fragments (for true ending)
+    this.starFragments = this.savedStarFragments || 0;
+
+    // Phase 12 state
+    this.materials = this.savedMaterials || {};
+    this.darkSeals = this.savedDarkSeals || 0;
+    this.petAffection = this.savedPetAffection || 0;
+    this.visitedChunks = this.savedVisitedChunks || {};
+    this._lichTowerUnlocked = this.savedLichTowerUnlocked || false;
+
+    // Achievement tracking
+    this.achievements = this.savedAchievements || {};
+    this._craftCount = this.savedCraftCount || 0;
+    this._fishCount = this.savedFishCount || 0;
+    this._totalGoldEarned = this.savedTotalGoldEarned || 0;
+
+    // Phase 14: NPC affection & story state
+    this.npcAffection = this.savedNpcAffection || {};
+    this.storyChoices = this.savedStoryChoices || {};
+    this._npcGiftGiven = this.savedNpcGiftGiven || {};
+    this._fishLuckBonus = this.savedFishLuckBonus || false;
+    this._jackTreeChoice = this.savedJackTreeChoice || null;
+
+    // New Game+ setup
+    this._ngpMultiplier = this.isNewGamePlus ? 1.5 : 1;
+
     // Gold and XP
     this.gold = this.savedGold || 0;
     this.xp = this.savedXP || 0;
@@ -434,14 +569,67 @@ export class GameScene extends Phaser.Scene {
     this.events.on('player-dying', () => this._paulRescue());
     this._paulRescueActive = false;
 
-    // Fade in (white if rescued by Paul)
+    // Paul random battle assist state
+    this._paulHelping = false;
+    this._paulHelpCooldown = 0;
+    this._paulCombatTimer = 0;
+    this._paulHelpThreshold = 20000 + Math.random() * 10000;
+
+    // Fade in (white if rescued by Paul, otherwise smooth black)
     if (this.paulRescued) {
       this.cameras.main.fadeIn(600, 255, 255, 255);
       this.time.delayedCall(800, () => {
         this.showNotification('Paul the Wizard saved you! (-10 gold)');
       });
     } else {
-      this.cameras.main.fadeIn(400, 0, 0, 0);
+      this._irisWipeIn(map.name);
+    }
+
+    // New Game+ notification (overworld only, first load)
+    if (this.isNewGamePlus && this.isOverworld) {
+      this.time.delayedCall(1000, () => {
+        this.showNotification('NEW GAME+ — Enemies are stronger!');
+      });
+    }
+
+    // NG+ HUD indicator
+    if (this.isNewGamePlus) {
+      this.add.text(this.cameras.main.width - 4, 42, 'NG+', {
+        fontSize: '9px', fontFamily: 'Arial, sans-serif',
+        color: '#dd88ff', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(9100);
+    }
+
+    // Arrow count state
+    this.arrowCount = 0;
+
+    // Wandering merchant state
+    this._merchantTimer = 0;
+    this._wanderingMerchant = null;
+    this._merchantStock = null;
+    this._isWanderingMerchantShop = false;
+
+    // Weather state
+    this._currentWeather = this.savedWeather || 'clear';
+    this._weatherTimer = 0;
+    this._weatherParticles = [];
+    this._weatherInterval = null;
+    this._regenBonus = this.savedRegenBonus || 0;
+    if (this._regenBonus > 0) {
+      this._regenTimer = this.time.addEvent({
+        delay: 5000,
+        callback: () => {
+          if (this.player && this._regenBonus > 0) {
+            const healed = Math.min(this._regenBonus, this.player.maxHealth - this.player.health);
+            if (healed > 0) {
+              this.player.health += healed;
+              this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+            }
+          }
+        },
+        loop: true,
+      });
     }
 
     // Start music for this map — map-based track selection
@@ -455,6 +643,13 @@ export class GameScene extends Phaser.Scene {
       forest: 'cave',
       forest_boss: 'boss',
       town2: 'interior',
+      mountain: 'cave',
+      mountain_cave: 'boss',
+      harbor: 'cave',
+      sea_cave: 'boss',
+      ruins: 'cave',
+      ruins_dungeon: 'boss',
+      lich_tower: 'boss',
     };
     const trackName = trackMap[mapName] || (mapName.includes('interior') ? 'interior' : 'interior');
     this.time.delayedCall(500, () => {
@@ -544,15 +739,15 @@ export class GameScene extends Phaser.Scene {
     this.dialogueContainer.add(this.dialogueText);
 
     // Advance arrow
-    const arrow = this.add.text(w - 10, boxY + boxH - 6, '\u25BC', {
+    this.dialogueArrow = this.add.text(w - 10, boxY + boxH - 6, '\u25BC', {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
       color: '#8b6d4a',
     }).setOrigin(1, 1);
-    this.dialogueContainer.add(arrow);
+    this.dialogueContainer.add(this.dialogueArrow);
 
     this.tweens.add({
-      targets: arrow,
+      targets: this.dialogueArrow,
       alpha: { from: 1, to: 0.2 },
       duration: 400,
       yoyo: true,
@@ -630,6 +825,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   advanceDialogue() {
+    // Don't advance while in choice mode — keyboard.once handles selection
+    if (this._inChoiceMode) return;
     // If typewriter is still running, skip to full text first
     if (!this._typewriterDone) {
       this._skipTypewriter();
@@ -663,6 +860,55 @@ export class GameScene extends Phaser.Scene {
       this.dialogueCallback();
       this.dialogueCallback = null;
     }
+  }
+
+  // --- Dialogue with branching choices (Phase 14) ---
+  showDialogueWithChoice(lines, choices, speakerName, portraitKey) {
+    this.showDialogue(lines, () => {
+      // After lines complete, reopen the dialogue box for choices
+      this._showChoices(choices, speakerName, portraitKey);
+    }, speakerName, portraitKey);
+  }
+
+  _showChoices(choices, speakerName, portraitKey) {
+    this.inDialogue = true;
+    this._inChoiceMode = true;
+    this.dialogueContainer.setVisible(true);
+    this.physics.pause();
+    if (this.boss && this.boss.pauseTimers) this.boss.pauseTimers();
+    if (this.dialogueArrow) this.dialogueArrow.setVisible(false);
+
+    this.dialogueSpeaker.setText('Choose:');
+    const choiceText = choices.map((c, i) => `${i + 1}) ${c.text}`).join('\n');
+    this.dialogueText.setText(choiceText);
+    this.dialogueCallback = null;
+
+    const _pick = (idx) => {
+      cleanup();
+      if (this.dialogueArrow) this.dialogueArrow.setVisible(true);
+      this._inChoiceMode = false;
+      choices[idx].callback();
+      this.closeDialogue();
+    };
+
+    const onOne = () => _pick(0);
+    const onTwo = () => _pick(1);
+    const onEsc = () => _pick(0);
+
+    const cleanup = () => {
+      this.input.keyboard.off('keydown-ONE', onOne);
+      this.input.keyboard.off('keydown-TWO', onTwo);
+      this.input.keyboard.off('keydown-ESC', onEsc);
+    };
+
+    this.input.keyboard.once('keydown-ONE', onOne);
+    this.input.keyboard.once('keydown-TWO', onTwo);
+    this.input.keyboard.once('keydown-ESC', onEsc);
+  }
+
+  // --- NPC affection helper (Phase 14) ---
+  _giveAffection(npcId, amount) {
+    this.npcAffection[npcId] = Math.min(100, (this.npcAffection[npcId] || 0) + amount);
   }
 
   // --- World building ---
@@ -765,6 +1011,77 @@ export class GameScene extends Phaser.Scene {
           }
         }
       }
+    } else if (map.floorTile === 'snow-floor') {
+      // Mountain snow floor — white/blue checkerboard
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          const shade = ((row + col) % 2 === 0) ? 0xddeeff : 0xccddee;
+          this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, shade).setDepth(0);
+        }
+      }
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x99aabb).setDepth(0);
+            }
+          }
+        }
+      }
+    } else if (map.floorTile === 'harbor-floor') {
+      // Harbor — sand floor with blue water edge rows and dock planks
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          let shade;
+          if (row < 3 || row >= map.height - 3) {
+            // Water rows at top/bottom
+            shade = ((col) % 2 === 0) ? 0x3366bb : 0x2255aa;
+          } else if ((row + col) % 5 === 0) {
+            shade = 0xcc9944; // dock plank
+          } else {
+            shade = ((row + col) % 2 === 0) ? 0xddbb88 : 0xccaa77; // sand
+          }
+          this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, shade).setDepth(0);
+        }
+      }
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x885533).setDepth(0);
+            }
+          }
+        }
+      }
+    } else if (map.floorTile === 'ruins-floor') {
+      // Ruins — dark grey checkerboard with procedural cracks
+      for (let row = 0; row < map.height; row++) {
+        for (let col = 0; col < map.width; col++) {
+          const shade = ((row + col) % 2 === 0) ? 0x555566 : 0x444455;
+          this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, shade).setDepth(0);
+          // Procedural crack decoration on every ~13th tile
+          if ((row * 7 + col * 11) % 13 === 0) {
+            const cx = col * ts + ts / 2;
+            const cy = row * ts + ts / 2;
+            const crack = this.add.graphics().setDepth(1);
+            crack.lineStyle(1, 0x222233, 0.7);
+            crack.beginPath();
+            crack.moveTo(cx - 3, cy - 2);
+            crack.lineTo(cx + 1, cy + 1);
+            crack.lineTo(cx + 3, cy + 4);
+            crack.strokePath();
+          }
+        }
+      }
+      if (map.layers.collision) {
+        for (let row = 0; row < map.height; row++) {
+          for (let col = 0; col < map.width; col++) {
+            if (map.layers.collision[row]?.[col] === 1) {
+              this.add.rectangle(col * ts + ts / 2, row * ts + ts / 2, ts, ts, 0x333344).setDepth(0);
+            }
+          }
+        }
+      }
     } else if (map.floorTile === 'wood-floor') {
       // Interior wood floor
       for (let row = 0; row < map.height; row++) {
@@ -839,7 +1156,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Environmental decorations
-    if (this.isOverworld || this.isForest || this.isTown2) {
+    if (this.isOverworld || this.isForest || this.isTown2 || this.isMountain || this.isHarbor || this.isRuins) {
       this.decorateWorld(map);
     }
 
@@ -1001,8 +1318,8 @@ export class GameScene extends Phaser.Scene {
     });
     this.npcs.add(fin);
 
-    // Lumberjack Jack - slime quest, wanders in woods
-    const jack = new NPC(this, 350, 350, 'lumberjack-jack', {
+    // Lumberjack Jack - slime quest, wanders in woods near forest entrance
+    const jack = new NPC(this, 140, 480, 'lumberjack-jack', {
       id: 'lumberjack_jack',
       name: 'Lumberjack Jack',
       questId: 'slime_cleanup',
@@ -1012,9 +1329,9 @@ export class GameScene extends Phaser.Scene {
       wanderRadius: 50,
       wanderAnims: { down: 'npc-jack-walk-down', right: 'npc-jack-walk-right', up: 'npc-jack-walk-up' },
       schedule: [
-        { time: 0, x: 720, y: 265 },    // night: near inn
-        { time: 0.3, x: 350, y: 350 },  // morning: forest
-        { time: 0.5, x: 200, y: 300 },  // midday: west woods
+        { time: 0, x: 720, y: 265 },    // night: inn
+        { time: 0.3, x: 140, y: 480 },  // morning: forest edge
+        { time: 0.5, x: 90,  y: 520 },  // midday: west woods
         { time: 0.75, x: 720, y: 265 }, // dusk: inn
       ],
     });
@@ -1085,17 +1402,16 @@ export class GameScene extends Phaser.Scene {
     this.respawnQueue = [];
 
     const skeletonPositions = [
-      { x: 400, y: 300 },
-      { x: 600, y: 200 },
-      { x: 200, y: 400 },
-      { x: 650, y: 350 },
-      { x: 350, y: 500 },
-      { x: 100, y: 250 },
-      { x: 700, y: 450 },
-      // New enemies in expanded area
-      { x: 850, y: 350 },
-      { x: 900, y: 500 },
-      { x: 500, y: 650 },
+      { x: 60,  y: 90  }, // Northwest near cave entrance
+      { x: 120, y: 150 }, // Cave approach path
+      { x: 50,  y: 320 }, // Far west edge
+      { x: 100, y: 460 }, // West edge near forest
+      { x: 300, y: 720 }, // South edge
+      { x: 560, y: 730 }, // South edge center
+      { x: 770, y: 690 }, // South edge east
+      { x: 960, y: 270 }, // Far east / desert border
+      { x: 990, y: 460 }, // Far east
+      { x: 910, y: 610 }, // Southeast corner
     ];
     for (const pos of skeletonPositions) {
       this.enemySpawns.push({ ...pos, type: 'skeleton' });
@@ -1103,11 +1419,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     const slimePositions = [
-      { x: 300, y: 350 },
-      { x: 450, y: 400 },
-      { x: 150, y: 200 },
-      { x: 650, y: 450 },
-      { x: 750, y: 600 },
+      { x: 70,  y: 410 }, // West edge near forest
+      { x: 80,  y: 540 }, // Southwest near forest entrance
+      { x: 410, y: 740 }, // South swamp
+      { x: 710, y: 750 }, // South swamp east
+      { x: 970, y: 160 }, // Far northeast desert border
     ];
     for (const pos of slimePositions) {
       this.enemySpawns.push({ ...pos, type: 'slime' });
@@ -1126,6 +1442,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  _applyNGP(enemy) {
+    if (this._ngpMultiplier && this._ngpMultiplier > 1) {
+      enemy.maxHp = Math.ceil((enemy.maxHp || enemy.health) * this._ngpMultiplier);
+      enemy.health = enemy.maxHp;
+      enemy._ngpActive = true;
+    }
+  }
+
   spawnSkeleton(x, y) {
     const skel = new Enemy(this, x, y, 'skeleton', {
       health: 3,
@@ -1135,6 +1459,7 @@ export class GameScene extends Phaser.Scene {
     });
     skel.spawnX = x;
     skel.spawnY = y;
+    this._applyNGP(skel);
     this.enemies.add(skel);
     return skel;
   }
@@ -1143,6 +1468,7 @@ export class GameScene extends Phaser.Scene {
     const slime = new Slime(this, x, y);
     slime.spawnX = x;
     slime.spawnY = y;
+    this._applyNGP(slime);
     this.enemies.add(slime);
     return slime;
   }
@@ -1169,6 +1495,20 @@ export class GameScene extends Phaser.Scene {
         this.spawnGoblin(e.x, e.y);
       } else if (e.type === 'orc') {
         this.spawnOrc(e.x, e.y);
+      } else if (e.type === 'goblin_archer') {
+        this.spawnGoblinArcher(e.x, e.y);
+      } else if (e.type === 'yeti') {
+        this.spawnYeti(e.x, e.y);
+      } else if (e.type === 'ice_skeleton') {
+        this.spawnIceSkeleton(e.x, e.y);
+      } else if (e.type === 'pirate_ghost') {
+        this.spawnPirateGhost(e.x, e.y);
+      } else if (e.type === 'sea_wraith') {
+        this.spawnSeaWraith(e.x, e.y);
+      } else if (e.type === 'zombie') {
+        this.spawnZombie(e.x, e.y);
+      } else if (e.type === 'undead_knight') {
+        this.spawnUndeadKnight(e.x, e.y);
       }
     }
   }
@@ -1180,6 +1520,14 @@ export class GameScene extends Phaser.Scene {
       this.boss = new Pharaoh(this, cx, cy);
     } else if (bossType === 'orc_chief') {
       this.boss = new OrcChief(this, cx, cy);
+    } else if (bossType === 'ice_witch') {
+      this.boss = new IceWitch(this, cx, cy);
+    } else if (bossType === 'sea_serpent') {
+      this.boss = new SeaSerpent(this, cx, cy);
+    } else if (bossType === 'death_knight') {
+      this.boss = new DeathKnight(this, cx, cy);
+    } else if (bossType === 'lich_king') {
+      this.boss = new LichKing(this, cx, cy);
     } else {
       this.boss = new SkeletonKing(this, cx, cy);
     }
@@ -1202,6 +1550,7 @@ export class GameScene extends Phaser.Scene {
     });
     goblin.body.setSize(12, 12);
     goblin.body.setOffset(10, 16);
+    this._applyNGP(goblin);
     this.enemies.add(goblin);
     return goblin;
   }
@@ -1217,8 +1566,218 @@ export class GameScene extends Phaser.Scene {
     });
     orc.body.setSize(14, 14);
     orc.body.setOffset(9, 14);
+    this._applyNGP(orc);
     this.enemies.add(orc);
     return orc;
+  }
+
+  spawnGoblinArcher(x, y) {
+    const archer = new GoblinArcher(this, x, y);
+    this._applyNGP(archer);
+    this.enemies.add(archer);
+    return archer;
+  }
+
+  spawnYeti(x, y) {
+    const yeti = new Enemy(this, x, y, 'goblin-thief', {
+      health: 8, speed: 25, damage: 2,
+      idleAnim: 'goblin-idle-down',
+      enemyType: 'yeti',
+      weakness: 'fire',
+      walkAnims: { right: 'goblin-walk-right', down: 'goblin-walk-down', up: 'goblin-walk-up' },
+    });
+    yeti.setScale(2.5);
+    yeti.setTint(0xddeeff);
+    yeti.body.setSize(18, 18);
+    yeti.body.setOffset(7, 7);
+    this._applyNGP(yeti);
+    this.enemies.add(yeti);
+    return yeti;
+  }
+
+  spawnIceSkeleton(x, y) {
+    const iceSkel = new Enemy(this, x, y, 'skeleton', {
+      health: 3, speed: 35,
+      idleAnim: 'skeleton-idle-down',
+      enemyType: 'ice_skeleton',
+      weakness: 'fire',
+      walkAnims: { right: 'skeleton-walk-right', down: 'skeleton-walk-down', up: 'skeleton-walk-up' },
+    });
+    iceSkel.setTint(0x88ccff);
+    this._applyNGP(iceSkel);
+    this.enemies.add(iceSkel);
+    return iceSkel;
+  }
+
+  spawnPirateGhost(x, y) {
+    const ghost = new Ghost(this, x, y);
+    ghost.setTint(0x88aadd);
+    ghost.enemyType = 'pirate_ghost';
+    ghost.weakness = 'lightning';
+    this._applyNGP(ghost);
+    this.enemies.add(ghost);
+    return ghost;
+  }
+
+  spawnSeaWraith(x, y) {
+    const wraith = new Ghost(this, x, y);
+    wraith.setTint(0x004499);
+    wraith.enemyType = 'sea_wraith';
+    wraith.weakness = 'lightning';
+    wraith.speed = 40;
+    wraith.damage = 2;
+    this._applyNGP(wraith);
+    this.enemies.add(wraith);
+    return wraith;
+  }
+
+  spawnZombie(x, y) {
+    const zombie = new Enemy(this, x, y, 'miner-mike', {
+      health: 4, speed: 22, damage: 1,
+      idleAnim: 'miner-idle-down',
+      enemyType: 'zombie',
+      weakness: 'fire',
+      walkAnims: { right: 'miner-walk-right', down: 'miner-walk-down', up: 'miner-walk-up' },
+    });
+    zombie.setTint(0x667744);
+    zombie.body.setSize(14, 18);
+    zombie.body.setOffset(9, 8);
+    this._applyNGP(zombie);
+    this.enemies.add(zombie);
+    return zombie;
+  }
+
+  spawnUndeadKnight(x, y) {
+    const knight = new Enemy(this, x, y, 'orc-grunt', {
+      health: 6, speed: 30, damage: 2,
+      idleAnim: 'orc-idle-down',
+      enemyType: 'undead_knight',
+      weakness: 'lightning',
+      walkAnims: { right: 'orc-walk-right', down: 'orc-walk-down', up: 'orc-walk-up' },
+    });
+    knight.setTint(0x553355);
+    knight.body.setSize(14, 14);
+    knight.body.setOffset(9, 14);
+    this._applyNGP(knight);
+    this.enemies.add(knight);
+    return knight;
+  }
+
+  // Spawned by DeathKnight summon ability
+  _spawnDeathKnightMinion(x, y) {
+    const minion = this.spawnZombie(x, y);
+    minion.setTint(0x441166);
+    return minion;
+  }
+
+  _spawnArenaCrystal(arenaProps) {
+    for (const prop of arenaProps) {
+      if (prop.type !== 'challenge_crystal') continue;
+      const crystal = this.add.rectangle(prop.x, prop.y, 10, 10, 0x88aaff);
+      crystal.setDepth(prop.y + 1);
+      this.tweens.add({
+        targets: crystal,
+        alpha: { from: 0.5, to: 1 },
+        scaleX: { from: 0.9, to: 1.1 },
+        scaleY: { from: 1.1, to: 0.9 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+      });
+      const label = this.add.text(prop.x, prop.y - 14, '[E] Arena', {
+        fontSize: '8px', fontFamily: 'Arial, sans-serif',
+        color: '#aaccff', stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(prop.y + 2);
+      // Physics zone
+      const zone = this.add.zone(prop.x, prop.y, 20, 20);
+      this.physics.add.existing(zone, true);
+      this._arenaCrystal = { zone, crystal, label, x: prop.x, y: prop.y };
+    }
+  }
+
+  _checkArenaCrystalInteract() {
+    if (!this._arenaCrystal || this._arenaActive) return;
+    const { zone } = this._arenaCrystal;
+    const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, zone.x, zone.y);
+    if (d > 24) return;
+    const q = this.questManager.getQuest('arena_challenge');
+    if (!q) return;
+    if (q.state === 'available') {
+      this.showDialogue(q.dialogue.available, () => {
+        this.questManager.acceptQuest('arena_challenge');
+        this.showNotification('Quest: Arena Champion');
+        this.sfx.play('questAccept');
+        this._startArenaWave(1);
+      }, 'Arena Crystal', null);
+    } else if (q.state === 'active') {
+      this._startArenaWave(this._arenaWave + 1);
+    } else if (q.state === 'ready') {
+      this._completeArenaQuest();
+    }
+  }
+
+  _startArenaWave(waveNum) {
+    if (this._arenaActive) return;
+    this._arenaActive = true;
+    this._arenaWave = waveNum;
+    this.showNotification(`WAVE ${waveNum} BEGIN!`);
+    this.cameras.main.shake(200, 0.006);
+
+    const spawnWaveEnemies = () => {
+      const cx = this.worldWidth / 2;
+      const cy = this.worldHeight / 2;
+      const enemies = [];
+      if (waveNum === 1) {
+        for (let i = 0; i < 3; i++) enemies.push(this.spawnSkeleton(cx + (i - 1) * 24, cy - 40));
+      } else if (waveNum === 2) {
+        for (let i = 0; i < 5; i++) enemies.push(this.spawnSkeleton(cx + (i - 2) * 20, cy - 40));
+        enemies.push(this.spawnSlime(cx - 30, cy + 20));
+      } else {
+        for (let i = 0; i < 7; i++) enemies.push(this.spawnSkeleton(cx + (i - 3) * 18, cy - 40));
+        enemies.push(this.spawnSlime(cx - 40, cy + 20));
+        enemies.push(this.spawnSlime(cx + 40, cy + 20));
+      }
+      this._arenaWaveEnemies = enemies.filter(Boolean);
+      this._arenaCheckTimer = this.time.addEvent({
+        delay: 500,
+        callback: () => this._checkArenaWaveComplete(waveNum),
+        loop: true,
+      });
+    };
+
+    this.time.delayedCall(600, spawnWaveEnemies);
+  }
+
+  _checkArenaWaveComplete(waveNum) {
+    if (!this._arenaWaveEnemies) return;
+    const alive = this._arenaWaveEnemies.filter(e => e && e.active && !e.isDead);
+    if (alive.length > 0) return;
+
+    if (this._arenaCheckTimer) { this._arenaCheckTimer.remove(); this._arenaCheckTimer = null; }
+    this._arenaActive = false;
+    this._arenaWaveEnemies = [];
+
+    if (waveNum >= 3) {
+      // All waves done
+      const q = this.questManager.getQuest('arena_challenge');
+      if (q && q.state === 'active') {
+        q.progress = 3;
+        q.state = 'ready';
+        this.updateQuestTracker();
+      }
+      this._completeArenaQuest();
+    } else {
+      this.showNotification(`Wave ${waveNum} cleared! Next wave: interact crystal`);
+    }
+  }
+
+  _completeArenaQuest() {
+    const q = this.questManager.getQuest('arena_challenge');
+    if (!q || q.state !== 'ready') return;
+    this.questManager.completeQuest('arena_challenge');
+    this.giveQuestReward('arena_challenge');
+    this.showNotification('Arena Champion! +150 Gold +200 XP');
+    this.sfx.play('questComplete');
   }
 
   spawnChickens() {
@@ -1316,6 +1875,24 @@ export class GameScene extends Phaser.Scene {
       }
       this.chests.add(chest);
     }
+
+    // Secret chests (star fragments)
+    const secretDefs = this.mapData.secretChests || [];
+    for (const def of secretDefs) {
+      const chest = new Chest(this, def.x, def.y);
+      chest.chestId = def.id;
+      chest.isSecret = true;
+      chest.secretLoot = def.loot;
+      // Golden tint to distinguish
+      chest.setTint(0xffaa00);
+      if (opened.includes(def.id)) {
+        chest.opened = true;
+        chest.setTint(0x888888);
+        chest.setAlpha(0.6);
+        chest.prompt.destroy();
+      }
+      this.chests.add(chest);
+    }
   }
 
   handleChestOpen() {
@@ -1354,6 +1931,16 @@ export class GameScene extends Phaser.Scene {
         duration: 400, ease: 'Power2',
         onComplete: () => sparkle.destroy(),
       });
+    }
+
+    // Secret chest: give star fragment
+    if (nearest.isSecret && nearest.secretLoot === 'star_fragment') {
+      this.starFragments = (this.starFragments || 0) + 1;
+      this.showNotification(`★ Star Fragment found! (${this.starFragments}/3)`);
+      if (this.starFragments >= 3) {
+        this.time.delayedCall(500, () => this.showNotification('All Star Fragments collected!'));
+      }
+      return true;
     }
 
     if (loot.type === 'gold') {
@@ -1400,7 +1987,10 @@ export class GameScene extends Phaser.Scene {
     const baseDmg = this.player.attackPower || 1;
     const equipBonus = this.equipment ? this.equipment.getAttackBonus() : 0;
     const levelBonus = this.playerAttackBonus || 0;
-    const dmg = baseDmg + equipBonus + levelBonus + (this._fairyAttackBuff ? 1 : 0);
+    let dmg = baseDmg + equipBonus + levelBonus + (this._fairyAttackBuff ? 1 : 0);
+    // Fire sword elemental bonus
+    const weapon = this.equipment ? this.equipment.getWeapon() : null;
+    if (weapon && weapon.id === 'fire_sword' && enemy.weakness === 'fire') dmg *= 2;
     enemy.takeDamage(dmg, this.player.x, this.player.y);
 
     // Combat juice - stronger feedback for charged/combo hits
@@ -1435,6 +2025,15 @@ export class GameScene extends Phaser.Scene {
         this.bestiary[enemy.enemyType] = (this.bestiary[enemy.enemyType] || 0) + 1;
       }
 
+      // Material drop
+      this._tryDropMaterial(enemy);
+
+      // Pet affection
+      if (this.pet) this.petAffection = Math.min(50, (this.petAffection || 0) + 1);
+
+      // Achievement check
+      this._checkAchievements();
+
       // Queue respawn
       if (enemy.spawnX !== undefined && this.respawnQueue) {
         this.queueRespawn({ x: enemy.spawnX, y: enemy.spawnY, type: enemy.enemyType || 'slime' });
@@ -1454,9 +2053,16 @@ export class GameScene extends Phaser.Scene {
 
   handleDoor(player, zone) {
     if (this._doorCooldown) return;
-    this._doorCooldown = true;
 
     const door = zone.doorData;
+
+    // Lich Tower requires all 6 biome bosses defeated
+    if (door.requiresLichTower && !this._lichTowerUnlocked) {
+      this.showNotification('The Lich Tower is sealed. Defeat all dungeon bosses first!');
+      return;
+    }
+
+    this._doorCooldown = true;
     this.player.setVelocity(0, 0);
     this.sfx.play('doorEnter');
 
@@ -1505,26 +2111,43 @@ export class GameScene extends Phaser.Scene {
         escortNpcId: this._escortNPC ? this._escortNPC.npcId : null,
         playerAttackBonus: this.playerAttackBonus,
         unlockedTeleports: this.unlockedTeleports,
+        isNewGamePlus: this.isNewGamePlus,
+        starFragments: this.starFragments,
+        materials: this.materials,
+        darkSeals: this.darkSeals,
+        petAffection: this.petAffection,
+        visitedChunks: this.visitedChunks,
+        lichTowerUnlocked: this._lichTowerUnlocked,
+        achievements: this.achievements,
+        _craftCount: this._craftCount,
+        _fishCount: this._fishCount,
+        _totalGoldEarned: this._totalGoldEarned,
+        weather: this._currentWeather,
+        _regenBonus: this._regenBonus,
+        npcAffection: this.npcAffection,
+        storyChoices: this.storyChoices,
+        npcGiftGiven: this._npcGiftGiven,
+        fishLuckBonus: this._fishLuckBonus,
+        jackTreeChoice: this._jackTreeChoice,
       });
     });
   }
 
   _irisWipeOut(onComplete) {
-    // Smooth wipe: brief freeze + fast fade
-    this.cameras.main.flash(100, 255, 255, 255, false, (cam, progress) => {
-      if (progress >= 0.5 && !this._wipeTriggered) {
-        this._wipeTriggered = true;
-        this.cameras.main.fadeOut(200, 0, 0, 0);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-          this._wipeTriggered = false;
-          if (onComplete) onComplete();
-        });
-      }
+    this.cameras.main.fadeOut(500, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      if (onComplete) onComplete();
     });
   }
 
-  _irisWipeIn() {
-    this.cameras.main.fadeIn(400, 0, 0, 0);
+  _irisWipeIn(mapName) {
+    this.cameras.main.fadeIn(500, 0, 0, 0);
+    // Welcome toast for named locations
+    const welcomeMap = { town2: 'Woodhaven', overworld: 'Greendale' };
+    const welcome = welcomeMap[mapName];
+    if (welcome) {
+      this.time.delayedCall(600, () => this.showNotification(`Welcome to ${welcome}`));
+    }
   }
 
   handleNPCInteraction() {
@@ -1540,9 +2163,21 @@ export class GameScene extends Phaser.Scene {
     const name = nearestNPC.npcName;
     const portrait = nearestNPC.texture.key;
 
+    // Wandering Merchant (dynamic spawn)
+    if (nearestNPC.npcId === 'wandering_merchant') {
+      this._openWanderingMerchantShop();
+      return;
+    }
+
     // Shop NPC
     if (nearestNPC.role === 'shop') {
       this.openShopMenu(nearestNPC);
+      return;
+    }
+
+    // Traveling Merchant (Woodhaven)
+    if (nearestNPC.npcId === 'town2_merchant') {
+      this._openMerchantShop();
       return;
     }
 
@@ -1555,6 +2190,30 @@ export class GameScene extends Phaser.Scene {
         this.handleInnInteraction(nearestNPC);
         return;
       }
+    }
+
+    // Alchemist Vera
+    if (nearestNPC.npcId === 'alchemist_vera') {
+      this._openCraftingMenu();
+      return;
+    }
+
+    // Hermit Rolf (mountain quests)
+    if (nearestNPC.npcId === 'hermit_rolf') {
+      this._handleChainedQuests(nearestNPC, ['yeti_hunt', 'frozen_tome', 'clear_mountain'], name, portrait);
+      return;
+    }
+
+    // Harbor Captain (harbor quests)
+    if (nearestNPC.npcId === 'harbor_captain') {
+      this._handleChainedQuests(nearestNPC, ['pirate_trouble', 'lost_anchor', 'clear_harbor'], name, portrait);
+      return;
+    }
+
+    // Gravekeeper Mort (ruins quests)
+    if (nearestNPC.npcId === 'gravekeeper_mort') {
+      this._handleChainedQuests(nearestNPC, ['banish_undead', 'sacred_relic', 'clear_ruins'], name, portrait);
+      return;
     }
 
     // Check if this NPC is a turnIn target for a delivery quest
@@ -1601,9 +2260,82 @@ export class GameScene extends Phaser.Scene {
         }, name, portrait);
         return;
       }
+
+      // Phase 14: Arc 1 — bob_deed_recovery → bob_farm_investment
+      const deliveryDone = deliveryQuest?.state === 'completed';
+      const deedQuest = this.questManager.getQuest('bob_deed_recovery');
+      const investQuest = this.questManager.getQuest('bob_farm_investment');
+      if (deliveryDone) {
+        if (deedQuest && deedQuest.state === 'available') {
+          this.showDialogue(deedQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('bob_deed_recovery');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + deedQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (deedQuest && (deedQuest.state === 'active' || deedQuest.state === 'ready')) {
+          this.showDialogue(deedQuest.dialogue[deedQuest.state], () => {
+            if (deedQuest.state === 'ready') {
+              this.giveQuestReward('bob_deed_recovery');
+              this.questManager.completeQuest('bob_deed_recovery');
+              this._giveAffection('farmer_bob', 5);
+              this.updateQuestTracker();
+              this.showNotification('Quest Complete!');
+              this.sfx.play('questComplete');
+            }
+          }, name, portrait);
+          return;
+        }
+        if (deedQuest && deedQuest.state === 'completed' && investQuest && investQuest.state === 'available') {
+          this.showDialogue(investQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('bob_farm_investment');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + investQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (investQuest && investQuest.state === 'active') {
+          this.showDialogue(investQuest.dialogue.active, null, name, portrait);
+          return;
+        }
+        if (investQuest && investQuest.state === 'ready') {
+          this.showDialogueWithChoice(investQuest.dialogue.ready, [
+            {
+              text: 'Keep it yours — small farms have heart.',
+              callback: () => {
+                this.storyChoices.bob = 'solo';
+                this._giveAffection('farmer_bob', 5);
+                this.giveQuestReward('bob_farm_investment');
+                this.questManager.completeQuest('bob_farm_investment');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete!');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+              },
+            },
+            {
+              text: "Let Buba in — together you'll grow stronger.",
+              callback: () => {
+                this.storyChoices.bob = 'partner';
+                this._giveAffection('farmer_bob', 10);
+                this.giveQuestReward('bob_farm_investment');
+                this.questManager.completeQuest('bob_farm_investment');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete!');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+              },
+            },
+          ], name, portrait);
+          return;
+        }
+      }
     }
 
-    // Miner Mike: chain clear_cave → clear_temple
+    // Miner Mike: chain clear_cave → clear_temple, then Phase 14 arc
     if (nearestNPC.npcId === 'miner_mike') {
       const caveQuest = this.questManager.getQuest('clear_cave');
       const templeQuest = this.questManager.getQuest('clear_temple');
@@ -1629,9 +2361,90 @@ export class GameScene extends Phaser.Scene {
         }, name, portrait);
         return;
       }
+
+      // Phase 14: Arc 2 — mike_journal_fragment → mike_family_locket
+      const caveDone = caveQuest?.state === 'completed';
+      const journalQuest = this.questManager.getQuest('mike_journal_fragment');
+      const locketQuest = this.questManager.getQuest('mike_family_locket');
+      if (caveDone) {
+        if (journalQuest && journalQuest.state === 'available') {
+          this.showDialogue(journalQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('mike_journal_fragment');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + journalQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (journalQuest && (journalQuest.state === 'active' || journalQuest.state === 'ready')) {
+          this.showDialogue(journalQuest.dialogue[journalQuest.state], () => {
+            if (journalQuest.state === 'ready') {
+              this.giveQuestReward('mike_journal_fragment');
+              this.questManager.completeQuest('mike_journal_fragment');
+              this._giveAffection('miner_mike', 5);
+              this.updateQuestTracker();
+              this.showNotification('Quest Complete!');
+              this.sfx.play('questComplete');
+            }
+          }, name, portrait);
+          return;
+        }
+        if (journalQuest && journalQuest.state === 'completed' && locketQuest && locketQuest.state === 'available') {
+          this.showDialogue(locketQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('mike_family_locket');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + locketQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (locketQuest && locketQuest.state === 'active') {
+          this.showDialogue(locketQuest.dialogue.active, null, name, portrait);
+          return;
+        }
+        if (locketQuest && locketQuest.state === 'ready') {
+          this.showDialogueWithChoice(locketQuest.dialogue.ready, [
+            {
+              text: 'Tell them the truth — they deserve to know.',
+              callback: () => {
+                this.storyChoices.mike = 'truth';
+                this._giveAffection('miner_mike', 10);
+                this.addXP(100);
+                this.giveQuestReward('mike_family_locket');
+                this.questManager.completeQuest('mike_family_locket');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete! +100 XP bonus');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+                this.time.delayedCall(200, () => {
+                  this.showDialogue(['They\'ll grieve. But truth\nis a gift too.'], null, name, portrait);
+                });
+              },
+            },
+            {
+              text: 'Tell them he died a hero protecting the temple.',
+              callback: () => {
+                this.storyChoices.mike = 'hero';
+                this._giveAffection('miner_mike', 5);
+                this.addGold(120);
+                this.giveQuestReward('mike_family_locket');
+                this.questManager.completeQuest('mike_family_locket');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete! +120g bonus');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+                this.time.delayedCall(200, () => {
+                  this.showDialogue(['I hope it brings\nthem peace.'], null, name, portrait);
+                });
+              },
+            },
+          ], name, portrait);
+          return;
+        }
+      }
     }
 
-    // Fisherman Fin: chain explore_pond → catch_fish
+    // Fisherman Fin: chain explore_pond → catch_fish, then Phase 14 arc
     if (nearestNPC.npcId === 'fisherman_fin') {
       const pondQuest = this.questManager.getQuest('explore_pond');
       const fishQuest = this.questManager.getQuest('catch_fish');
@@ -1656,6 +2469,87 @@ export class GameScene extends Phaser.Scene {
           }
         }, name, portrait);
         return;
+      }
+
+      // Phase 14: Arc 3 — fin_sea_essence → fin_deep_cast
+      const harborFishDone = this.questManager.getQuest('harbor_fish')?.state === 'completed';
+      const seaEssenceQuest = this.questManager.getQuest('fin_sea_essence');
+      const deepCastQuest = this.questManager.getQuest('fin_deep_cast');
+      if (harborFishDone) {
+        if (seaEssenceQuest && seaEssenceQuest.state === 'available') {
+          this.showDialogue(seaEssenceQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('fin_sea_essence');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + seaEssenceQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (seaEssenceQuest && (seaEssenceQuest.state === 'active' || seaEssenceQuest.state === 'ready')) {
+          this.showDialogue(seaEssenceQuest.dialogue[seaEssenceQuest.state], () => {
+            if (seaEssenceQuest.state === 'ready') {
+              this.giveQuestReward('fin_sea_essence');
+              this.questManager.completeQuest('fin_sea_essence');
+              this._giveAffection('fisherman_fin', 5);
+              this.updateQuestTracker();
+              this.showNotification('Quest Complete!');
+              this.sfx.play('questComplete');
+            }
+          }, name, portrait);
+          return;
+        }
+        if (seaEssenceQuest && seaEssenceQuest.state === 'completed' && deepCastQuest && deepCastQuest.state === 'available') {
+          this.showDialogue(deepCastQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('fin_deep_cast');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + deepCastQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (deepCastQuest && deepCastQuest.state === 'active') {
+          this.showDialogue(deepCastQuest.dialogue.active, null, name, portrait);
+          return;
+        }
+        if (deepCastQuest && deepCastQuest.state === 'ready') {
+          this.showDialogueWithChoice(deepCastQuest.dialogue.ready, [
+            {
+              text: 'Release it — some things are beyond trophies.',
+              callback: () => {
+                this.storyChoices.fin = 'release';
+                this._giveAffection('fisherman_fin', 10);
+                this._fishLuckBonus = true;
+                this.giveQuestReward('fin_deep_cast');
+                this.questManager.completeQuest('fin_deep_cast');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete! Lucky Lure unlocked!');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+                this.time.delayedCall(200, () => {
+                  this.showDialogue(['The sea remembers kindness.'], null, name, portrait);
+                });
+              },
+            },
+            {
+              text: "Keep it — you've earned this moment of glory!",
+              callback: () => {
+                this.storyChoices.fin = 'keep';
+                this._giveAffection('fisherman_fin', 5);
+                this.addGold(100);
+                this.giveQuestReward('fin_deep_cast');
+                this.questManager.completeQuest('fin_deep_cast');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete! +100g');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+                this.time.delayedCall(200, () => {
+                  this.showDialogue(['I\'m going to mount it\non the inn wall!'], null, name, portrait);
+                });
+              },
+            },
+          ], name, portrait);
+          return;
+        }
       }
     }
 
@@ -1716,7 +2610,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Lumberjack Jack: chain slime_cleanup → lost_axe
+    // Lumberjack Jack: chain slime_cleanup → lost_axe, then Phase 14 arc
     if (nearestNPC.npcId === 'lumberjack_jack') {
       const slimeQuest = this.questManager.getQuest('slime_cleanup');
       const axeQuest = this.questManager.getQuest('lost_axe');
@@ -1740,6 +2634,106 @@ export class GameScene extends Phaser.Scene {
             this.sfx.play('questComplete');
           }
         }, name, portrait);
+        return;
+      }
+
+      // Phase 14: Arc 4 — jack_tree_investigation → jack_tree_materials
+      const axeDone = axeQuest?.state === 'completed';
+      const treeInvestQuest = this.questManager.getQuest('jack_tree_investigation');
+      const treeMatsQuest = this.questManager.getQuest('jack_tree_materials');
+      if (axeDone) {
+        if (treeInvestQuest && treeInvestQuest.state === 'available') {
+          this.showDialogue(treeInvestQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('jack_tree_investigation');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + treeInvestQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (treeInvestQuest && (treeInvestQuest.state === 'active' || treeInvestQuest.state === 'ready')) {
+          this.showDialogue(treeInvestQuest.dialogue[treeInvestQuest.state], () => {
+            if (treeInvestQuest.state === 'ready') {
+              this.giveQuestReward('jack_tree_investigation');
+              this.questManager.completeQuest('jack_tree_investigation');
+              this._giveAffection('lumberjack_jack', 5);
+              this.updateQuestTracker();
+              this.showNotification('Quest Complete!');
+              this.sfx.play('questComplete');
+            }
+          }, name, portrait);
+          return;
+        }
+        if (treeInvestQuest && treeInvestQuest.state === 'completed' && treeMatsQuest && treeMatsQuest.state === 'available') {
+          this.showDialogue(treeMatsQuest.dialogue.available, () => {
+            this.questManager.acceptQuest('jack_tree_materials');
+            this.updateQuestTracker();
+            this.showNotification('Quest: ' + treeMatsQuest.name);
+            this.sfx.play('questAccept');
+          }, name, portrait);
+          return;
+        }
+        if (treeMatsQuest && treeMatsQuest.state === 'active') {
+          this.showDialogue(treeMatsQuest.dialogue.active, null, name, portrait);
+          return;
+        }
+        if (treeMatsQuest && treeMatsQuest.state === 'ready') {
+          this.showDialogueWithChoice(treeMatsQuest.dialogue.ready, [
+            {
+              text: 'Purify it — some things are worth more than gold.',
+              callback: () => {
+                this.storyChoices.jack = 'purify';
+                this._jackTreeChoice = 'purify';
+                this._giveAffection('lumberjack_jack', 10);
+                this.giveQuestReward('jack_tree_materials');
+                this.questManager.completeQuest('jack_tree_materials');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete! Ancient tree purified!');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+                this.time.delayedCall(200, () => {
+                  this.showDialogue(['The forest will\nthank you, Lizzy.'], null, name, portrait);
+                });
+              },
+            },
+            {
+              text: 'Cut it down — take the gold and build something new.',
+              callback: () => {
+                this.storyChoices.jack = 'cut';
+                this._jackTreeChoice = 'cut';
+                this._giveAffection('lumberjack_jack', 5);
+                this.addGold(120);
+                this.giveQuestReward('jack_tree_materials');
+                this.questManager.completeQuest('jack_tree_materials');
+                this.updateQuestTracker();
+                this.showNotification('Quest Complete! +120g');
+                this.sfx.play('questComplete');
+                this._checkAchievements();
+                this.time.delayedCall(200, () => {
+                  this.showDialogue(['Finest lumber I\'ve\never seen.'], null, name, portrait);
+                });
+              },
+            },
+          ], name, portrait);
+          return;
+        }
+      }
+    }
+
+    // Phase 14: Buba signed_note interaction for bob_farm_investment
+    if (nearestNPC.npcId === 'farmer_buba') {
+      const investQuest = this.questManager.getQuest('bob_farm_investment');
+      if (investQuest && investQuest.state === 'active') {
+        this.showDialogue(
+          ['I\'ve been saving to help Bob!\nHere, take this note.'],
+          () => {
+            this.questManager.trackEvent('collect', { target: 'signed_note' });
+            this.updateQuestTracker();
+            this.showNotification('Got Buba\'s Note!');
+            this.sfx.play('itemPickup');
+          },
+          name, portrait
+        );
         return;
       }
     }
@@ -1768,6 +2762,51 @@ export class GameScene extends Phaser.Scene {
             this.sfx.play('questComplete');
           }
         }, name, portrait);
+        return;
+      }
+    }
+
+    // Phase 14: One-time affection gift at >= 60 (fires before other dialogue)
+    const _arcNpcIds = ['farmer_bob', 'miner_mike', 'fisherman_fin', 'lumberjack_jack'];
+    if (_arcNpcIds.includes(nearestNPC.npcId)) {
+      const _nid = nearestNPC.npcId;
+      if ((this.npcAffection[_nid] || 0) >= 60 && !this._npcGiftGiven[_nid]) {
+        this._npcGiftGiven[_nid] = true;
+        const giftLines = {
+          farmer_bob:      ['Thank you for everything, Lizzy!\nHere\'s 75 gold from the harvest.'],
+          miner_mike:      ['You\'ve done so much for me, Lizzy.\nTake my Miner\'s Lantern!', 'Your torch will burn\nbrighter in the dark.'],
+          fisherman_fin:   ['You\'re a true friend, Lizzy.\nTake this Lucky Lure!', 'It\'ll help you\ncatch fish!'],
+          lumberjack_jack: ['I couldn\'t ask for a better ally.\nLet me teach you a trick!', '+1 Attack — the strength\nof a woodsman!'],
+        };
+        const giftEffects = {
+          farmer_bob:      () => this.addGold(75),
+          miner_mike:      () => { this._torchBonus = true; },
+          fisherman_fin:   () => { this._fishLuckBonus = true; },
+          lumberjack_jack: () => { this.playerAttackBonus += 1; },
+        };
+        this.showDialogue(giftLines[_nid], () => {
+          if (giftEffects[_nid]) giftEffects[_nid]();
+          this.showNotification('Received a special gift!');
+        }, name, portrait);
+        return;
+      }
+    }
+
+    // Post-Lich NPC victory dialogue
+    if (this.questManager.getQuest('defeat_lich')?.state === 'completed') {
+      const postLichLines = {
+        innkeeper:        ['With the Lich gone, I\'ve had the best\nweek of business in years!'],
+        innkeeper_bob:    ['With the Lich gone, I\'ve had the best\nweek of business in years!'],
+        farmer_bob:       ['With the Lich gone, I\'ve had the best\nweek of business in years!'],
+        miner_mike:       ['The mines feel lighter.\nWhatever darkness Voleth spread... it\'s lifted.'],
+        ranger_reed:      ['The forest is healing.\nBirds are returning — I\'ve never seen so many.'],
+        hermit_rolf:      ['History repeats. Voleth\'s own people sealed\nhim away once before. You\'ve done it again.'],
+        gravekeeper_mort: ['The undead are finally at rest.\nVoleth promised eternity. Greendale gave them peace.'],
+        harbor_captain:   ['Ships are already returning!\nWord travels fast of your victory.'],
+      };
+      const pLines = postLichLines[nearestNPC.npcId];
+      if (pLines) {
+        this.showDialogue(pLines, null, name, portrait);
         return;
       }
     }
@@ -1831,28 +2870,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   checkVictory() {
-    const cave = this.questManager.getQuest('clear_cave');
-    const temple = this.questManager.getQuest('clear_temple');
-    const forest = this.questManager.getQuest('clear_forest');
-    const caveDone = cave && (cave.state === 'completed' || cave.state === 'ready');
-    const templeDone = temple && (temple.state === 'completed' || temple.state === 'ready');
-    const forestDone = forest && (forest.state === 'completed' || forest.state === 'ready');
-    if (caveDone && templeDone && forestDone) {
-      // Both bosses defeated - trigger victory after delay
-      this.time.delayedCall(3000, () => {
-        const questsCompleted = this.questManager.getAllQuests()
-          .filter(q => q.state === 'completed' || q.state === 'ready').length;
-        this.cameras.main.fadeOut(1500, 255, 255, 255);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-          this.scene.stop('UI');
-          this.scene.start('Victory', {
-            level: this.level,
-            gold: this.gold,
-            questsCompleted,
-          });
+    const questsDone = (id) => {
+      const q = this.questManager.getQuest(id);
+      return q && (q.state === 'completed' || q.state === 'ready');
+    };
+
+    const caveDone = questsDone('clear_cave');
+    const templeDone = questsDone('clear_temple');
+    const forestDone = questsDone('clear_forest');
+    const mountainDone = questsDone('clear_mountain');
+    const harborDone = questsDone('clear_harbor');
+    const ruinsDone = questsDone('clear_ruins');
+
+    // Unlock Lich Tower when all 6 biome bosses defeated
+    if (caveDone && templeDone && forestDone && mountainDone && harborDone && ruinsDone) {
+      if (!this._lichTowerUnlocked) {
+        this._lichTowerUnlocked = true;
+        this.showNotification('All dungeon bosses defeated! The Lich Tower is now open!');
+        // Auto-complete lich_warning
+        const lichWarn = this.questManager.getQuest('lich_warning');
+        if (lichWarn && lichWarn.state === 'active') {
+          lichWarn.progress = 1;
+          lichWarn.state = 'ready';
+          this.updateQuestTracker();
+        }
+      }
+    }
+    // Old 3-boss checkpoint: award intermediate victory notification
+    else if (caveDone && templeDone && forestDone && !this._phase12Started) {
+      this._phase12Started = true;
+      this.showNotification('Three dungeons cleared! Explore further...');
+    }
+  }
+
+  _triggerLichVictory() {
+    this.time.delayedCall(3000, () => {
+      const questsCompleted = this.questManager.getAllQuests()
+        .filter(q => q.state === 'completed' || q.state === 'ready').length;
+      const trueEnding = this.starFragments >= 3;
+      this.cameras.main.fadeOut(1500, 255, 255, 255);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.stop('UI');
+        this.scene.start('Victory', {
+          level: this.level,
+          gold: this.gold,
+          questsCompleted,
+          trueEnding,
+          lichEnding: true,
+          achievements: this.achievements,
         });
       });
-    }
+    });
   }
 
   showNotification(msg) {
@@ -1884,7 +2952,9 @@ export class GameScene extends Phaser.Scene {
     if (quest && quest.reward) {
       if (quest.reward.gold) this.addGold(quest.reward.gold);
       if (quest.reward.xp) this.addXP(quest.reward.xp);
+      if (this.pet) this.petAffection = Math.min(50, (this.petAffection || 0) + 2);
     }
+    this._checkAchievements();
     // Auto-save on quest milestone
     this.time.delayedCall(100, () => SaveManager.save(this));
   }
@@ -1892,35 +2962,61 @@ export class GameScene extends Phaser.Scene {
   // --- Quest variety: escort, timed, fetch ---
 
   _spawnFetchItems() {
+    // Legacy: Lost Axe in forest
     const axeQuest = this.questManager.getQuest('lost_axe');
     if (axeQuest && axeQuest.state === 'active' && this.mapData.name === 'forest') {
       const obj = axeQuest.objective;
-      const item = this.add.rectangle(obj.fetchX, obj.fetchY, 8, 8, 0xffaa00);
-      item.setDepth(9000);
-      // Sparkle effect
-      this.tweens.add({
-        targets: item, alpha: 0.5, duration: 500, yoyo: true, repeat: -1,
-      });
-      const label = this.add.text(obj.fetchX, obj.fetchY - 10, 'Axe', {
-        fontSize: '8px', fontFamily: 'Arial, sans-serif',
-        color: '#ffdd00', stroke: '#000000', strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(9001);
-      // Physics zone for pickup
-      const zone = this.add.zone(obj.fetchX, obj.fetchY, 16, 16);
-      this.physics.add.existing(zone, true);
-      this.physics.add.overlap(this.player, zone, () => {
-        if (item._collected) return;
-        item._collected = true;
-        axeQuest.progress = axeQuest.objective.count;
-        axeQuest.state = 'ready';
-        this.updateQuestTracker();
-        this.showNotification('Found the Lost Axe!');
-        this.sfx.play('itemPickup');
-        item.destroy();
-        label.destroy();
-        zone.destroy();
-      });
+      this._spawnFetchItem(obj.fetchX, obj.fetchY, 'Axe', 0xffaa00, axeQuest, 'Found the Lost Axe!');
     }
+
+    // Generic: from map.fetchItems array (new maps)
+    const fetchItems = this.mapData.fetchItems;
+    if (!fetchItems) return;
+    for (const fi of fetchItems) {
+      // Find quest with matching fetchItem id
+      const quest = Object.values(this.questManager.quests).find(
+        q => q.state === 'active' && q.objective && q.objective.fetchItemId === fi.id
+      );
+      if (!quest) continue;
+
+      const colors = {
+        frozen_tome: 0x88ccff, lost_anchor: 0x4488ff, sacred_relic: 0xddaa44,
+        deed_scroll: 0xddcc88, journal_fragment: 0xbbaa88, family_locket: 0xffdd44,
+      };
+      const labels = {
+        frozen_tome: 'Tome', lost_anchor: 'Anchor', sacred_relic: 'Relic',
+        deed_scroll: 'Deed', journal_fragment: 'Journal', family_locket: 'Locket',
+      };
+      const msgs = {
+        frozen_tome: 'Found the Frozen Tome!', lost_anchor: 'Found the Lost Anchor!', sacred_relic: 'Found the Sacred Relic!',
+        deed_scroll: 'Found the Farm Deed!', journal_fragment: 'Found the Journal!', family_locket: 'Found the Locket!',
+      };
+      this._spawnFetchItem(fi.x, fi.y, labels[fi.id] || fi.id, colors[fi.id] || 0xffaa00, quest, msgs[fi.id] || 'Item Found!');
+    }
+  }
+
+  _spawnFetchItem(fx, fy, labelText, color, quest, notif) {
+    const item = this.add.rectangle(fx, fy, 8, 8, color);
+    item.setDepth(9000);
+    this.tweens.add({ targets: item, alpha: 0.5, duration: 500, yoyo: true, repeat: -1 });
+    const label = this.add.text(fx, fy - 10, labelText, {
+      fontSize: '8px', fontFamily: 'Arial, sans-serif',
+      color: '#ffdd00', stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(9001);
+    const zone = this.add.zone(fx, fy, 16, 16);
+    this.physics.add.existing(zone, true);
+    this.physics.add.overlap(this.player, zone, () => {
+      if (item._collected) return;
+      item._collected = true;
+      quest.progress = quest.objective.count;
+      quest.state = 'ready';
+      this.updateQuestTracker();
+      this.showNotification(notif);
+      this.sfx.play('itemPickup');
+      item.destroy();
+      label.destroy();
+      zone.destroy();
+    });
   }
 
   _startEscort(npcId) {
@@ -2018,7 +3114,9 @@ export class GameScene extends Phaser.Scene {
     this.gold += amount;
     this.events.emit('gold-changed', this.gold);
     if (amount > 0) {
+      this._totalGoldEarned = (this._totalGoldEarned || 0) + amount;
       this.showFloatingText(this.player.x, this.player.y - 12, `+${amount}g`, '#ffdd00');
+      this._checkAchievements();
     }
   }
 
@@ -2110,30 +3208,35 @@ export class GameScene extends Phaser.Scene {
     this.events.emit('inventory-changed', this.inventory.slots);
 
     if (itemId === 'health_potion') {
-      const healed = Math.min(2, this.player.maxHealth - this.player.health);
+      const healed = Math.min(4, this.player.maxHealth - this.player.health);
       if (healed <= 0) {
-        // Refund - inventory was already decremented, re-add
+        // Refund - already at full HP
         this.inventory.addItem('health_potion', 1);
         this.events.emit('inventory-changed', this.inventory.slots);
         return;
       }
-      this.player.health = Math.min(this.player.health + 2, this.player.maxHealth);
+      this.player.health = Math.min(this.player.health + 4, this.player.maxHealth);
       this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
       this.showPotionEffect(0xe74c3c);
-      this.showNotification('+2 HP');
+      this.sfx.play('heal');
+      this.showNotification(`+${healed} HP`);
     } else if (itemId === 'speed_potion') {
       const originalSpeed = this.player.speed;
-      this.player.speed = Math.round(originalSpeed * 1.5);
+      this.player.speed = Math.round(originalSpeed * 1.6);
       this.showPotionEffect(0x3498db);
-      this.showNotification('Speed Boost!');
+      this.showNotification('Speed boost! (8s)');
       this.time.delayedCall(8000, () => {
-        this.player.speed = originalSpeed;
+        if (this.player) this.player.speed = originalSpeed;
       });
     } else if (itemId === 'shield_potion') {
       this.player.invulnerable = true;
       this.player.invulnerableTimer = 5000;
+      this.player.setTint(0xaaddff);
       this.showPotionEffect(0xf1c40f);
-      this.showNotification('Shield Active!');
+      this.showNotification('Shield active! (5s)');
+      this.time.delayedCall(5000, () => {
+        if (this.player) { this.player.invulnerable = false; this.player.clearTint(); }
+      });
     }
   }
 
@@ -2226,10 +3329,24 @@ export class GameScene extends Phaser.Scene {
   openShopMenu(npc) {
     // Build shop inventory: potions + next equipment tier
     const shopItems = [
-      { id: 'health_potion', name: 'Health Potion', price: 15, color: '#e74c3c', type: 'potion', desc: 'Restores 2 HP' },
-      { id: 'speed_potion', name: 'Speed Potion', price: 30, color: '#3498db', type: 'potion', desc: '1.5x speed, 8s' },
+      { id: 'health_potion', name: 'Health Potion', price: 15, color: '#e74c3c', type: 'potion', desc: 'Restores 4 HP' },
+      { id: 'speed_potion', name: 'Speed Potion', price: 30, color: '#3498db', type: 'potion', desc: '1.6x speed, 8s' },
       { id: 'shield_potion', name: 'Shield Potion', price: 50, color: '#f1c40f', type: 'potion', desc: 'Invincible, 5s' },
+      { id: 'elemental_arrow', name: 'Fire Arrows x5', price: 30, color: '#ff6622', type: 'arrow', desc: 'Fire dmg vs enemy' },
+      { id: 'rune_stone', name: 'Rune Stone', price: 120, color: '#8844ff', type: 'rune', desc: '+1 max mana' },
+      { id: 'antidote', name: 'Antidote', price: 25, color: '#44cc44', type: 'antidote', desc: 'Clears slow effect' },
+      { id: 'torch_bundle', name: 'Torch Bundle', price: 40, color: '#ffaa22', type: 'torch', desc: '+50% cave light, 3m' },
     ];
+
+    // NG+ exclusive item
+    if (this.isNewGamePlus) {
+      shopItems.push({ id: 'void_shard', name: 'Void Shard', price: 500, color: '#cc88ff', type: 'special', desc: '+1 ATK perm' });
+    }
+
+    // NG+ price adjustment (1.5x)
+    if (this.isNewGamePlus) {
+      shopItems.forEach(item => { item.price = Math.ceil(item.price * 1.5); });
+    }
 
     // Show equipment upgrades the player doesn't own yet
     const weaponTiers = ['wooden_sword', 'iron_sword', 'fire_sword'];
@@ -2309,7 +3426,17 @@ export class GameScene extends Phaser.Scene {
       this.shopContainer = null;
     }
     this._shopActive = false;
+    this._isWanderingMerchantShop = false;
     this.inDialogue = false;
+  }
+
+  _reopenCurrentShop() {
+    const isWM = this._isWanderingMerchantShop;
+    if (this.shopContainer) { this.shopContainer.destroy(); this.shopContainer = null; }
+    this._shopActive = false;
+    this.inDialogue = false;
+    if (isWM) this._openWanderingMerchantShop();
+    else this.openShopMenu(this._shopNPC);
   }
 
   handleShopBuy(index) {
@@ -2342,7 +3469,118 @@ export class GameScene extends Phaser.Scene {
 
       this.showNotification(`Equipped ${equip.name}!`);
       this.closeShop();
-      this.openShopMenu(this._shopNPC);
+      this._reopenCurrentShop();
+      return;
+    }
+
+    // Special one-time items
+    if (item.type === 'special' && item.id === 'void_shard') {
+      this.addGold(-item.price);
+      this.sfx.play('levelUp');
+      this.playerAttackBonus = (this.playerAttackBonus || 0) + 1;
+      this.showNotification('Void Shard: +1 ATK permanently!');
+      this.closeShop();
+      return;
+    }
+    if (item.type === 'arrow') {
+      this.addGold(-item.price);
+      this.sfx.play('coinSpend');
+      this.arrowCount = (this.arrowCount || 0) + 5;
+      this.showNotification(`Fire Arrows: ${this.arrowCount} remaining`);
+      this.closeShop();
+      this._reopenCurrentShop();
+      return;
+    }
+    if (item.type === 'rune') {
+      this.addGold(-item.price);
+      this.sfx.play('levelUp');
+      this.player.maxMana = Math.min(12, this.player.maxMana + 1);
+      this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+      this.showNotification('+1 Max Mana!');
+      this.closeShop();
+      this._reopenCurrentShop();
+      return;
+    }
+    if (item.type === 'antidote') {
+      this.addGold(-item.price);
+      this.sfx.play('coinSpend');
+      if (this.player._slowed) {
+        this.player._slowed = false;
+        this.player.speed = this.player._baseSpeed || this.player.speed;
+      }
+      this.showNotification('Antidote used!');
+      this.closeShop();
+      this._reopenCurrentShop();
+      return;
+    }
+    if (item.type === 'torch') {
+      this.addGold(-item.price);
+      this.sfx.play('coinSpend');
+      this._torchBonus = true;
+      this.showNotification('Torch Bundle active! (3 min)');
+      this.time.delayedCall(180000, () => { this._torchBonus = false; });
+      this.closeShop();
+      this._reopenCurrentShop();
+      return;
+    }
+
+    // Wandering merchant special items
+    if (item.type === 'star_potion') {
+      this.addGold(-item.price);
+      this.sfx.play('heal');
+      this.player.mana = this.player.maxMana;
+      this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+      this.showNotification('Star Potion: Full mana restored!');
+      this.closeShop();
+      return;
+    }
+    if (item.type === 'magic_seed') {
+      this.addGold(-item.price);
+      this.sfx.play('heal');
+      this._regenBonus = (this._regenBonus || 0) + 1;
+      this.showNotification(`Magic Seed: +1 HP regen/5s! (Total: ${this._regenBonus})`);
+      if (!this._regenTimer) {
+        this._regenTimer = this.time.addEvent({
+          delay: 5000,
+          callback: () => {
+            if (this.player && this._regenBonus > 0) {
+              const healed = Math.min(this._regenBonus, this.player.maxHealth - this.player.health);
+              if (healed > 0) {
+                this.player.health += healed;
+                this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+              }
+            }
+          },
+          loop: true,
+        });
+      }
+      this.closeShop();
+      return;
+    }
+    if (item.type === 'ancient_map') {
+      this.addGold(-item.price);
+      this.sfx.play('questComplete');
+      const mName = this.mapData.name;
+      const cSize = mName === 'overworld' ? 128 : 64;
+      if (!this.visitedChunks[mName]) this.visitedChunks[mName] = [];
+      const visited = new Set(this.visitedChunks[mName]);
+      const cX = Math.ceil(this.worldWidth / cSize);
+      const cY = Math.ceil(this.worldHeight / cSize);
+      for (let cy = 0; cy < cY; cy++) {
+        for (let cx = 0; cx < cX; cx++) visited.add(`${cx},${cy}`);
+      }
+      this.visitedChunks[mName] = Array.from(visited);
+      this.showNotification('Ancient Map: Current map fully revealed!');
+      this.closeShop();
+      return;
+    }
+    if (item.type === 'speed_crystal') {
+      this.addGold(-item.price);
+      this.sfx.play('levelUp');
+      this.player.speed = Math.round(this.player.speed * 1.1);
+      this.player._baseSpeed = this.player.speed;
+      this.showNotification('Speed Crystal: +10% speed permanently!');
+      this.closeShop();
       return;
     }
 
@@ -2357,7 +3595,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit('inventory-changed', this.inventory.slots);
     // Refresh shop display
     this.closeShop();
-    this.openShopMenu(this._shopNPC);
+    this._reopenCurrentShop();
   }
 
   handleInnInteraction(npc) {
@@ -2464,6 +3702,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Chain Lightning — separate handler
+    if (spell.isLightning) {
+      this._castLightning(spell);
+      return;
+    }
+
     // Projectile spells (Fireball / Ice Bolt)
     this.player.mana -= spell.manaCost;
     this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
@@ -2516,9 +3760,16 @@ export class GameScene extends Phaser.Scene {
     // Enemy collision
     this.physics.add.overlap(projShape, this.enemies, (p, enemy) => {
       if (!enemy.takeDamage || enemy.health <= 0) return;
-      enemy.takeDamage(p.damage, this.player.x, this.player.y);
+      // Elemental weakness/resist
+      let magicDmg = p.damage;
+      let dmgType = 'magic';
+      if (spell.element && enemy.weakness === spell.element) {
+        magicDmg = magicDmg * 2;
+        dmgType = 'weakness';
+      }
+      enemy.takeDamage(magicDmg, this.player.x, this.player.y);
       this.sfx.play('hit');
-      this.showDamageNumber(enemy.x, enemy.y - 8, p.damage, 'magic');
+      this.showDamageNumber(enemy.x, enemy.y - 8, magicDmg, dmgType);
 
       // Ice slow effect
       if (p.slow && enemy.speed && !enemy._slowed) {
@@ -2569,6 +3820,10 @@ export class GameScene extends Phaser.Scene {
         if (enemy.enemyType && this.bestiary) {
           this.bestiary[enemy.enemyType] = (this.bestiary[enemy.enemyType] || 0) + 1;
         }
+        // Material drop
+        this._tryDropMaterial(enemy);
+        // Pet affection
+        if (this.pet) this.petAffection = Math.min(50, (this.petAffection || 0) + 1);
       }
     });
 
@@ -2580,6 +3835,107 @@ export class GameScene extends Phaser.Scene {
         projShape.destroy();
       }
     });
+  }
+
+  _castLightning(spell) {
+    this.player.mana -= spell.manaCost;
+    this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+    this.sfx.play('fireball'); // closest SFX to lightning
+
+    // Find nearest enemy within 200px
+    let nearest = null;
+    let nearestDist = Infinity;
+    for (const e of this.enemies.getChildren()) {
+      if (!e.active || !e.takeDamage) continue;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y);
+      if (d < 200 && d < nearestDist) { nearest = e; nearestDist = d; }
+    }
+    if (!nearest) return;
+
+    // Hit primary target
+    let primaryDmg = spell.damage;
+    if (nearest.weakness === 'lightning') {
+      primaryDmg *= 2;
+      this.showDamageNumber(nearest.x, nearest.y - 8, primaryDmg, 'weakness');
+    } else {
+      this.showDamageNumber(nearest.x, nearest.y - 8, primaryDmg, 'magic');
+    }
+    nearest.takeDamage(primaryDmg, this.player.x, this.player.y);
+
+    // Lightning arc from player to nearest
+    this._drawLightningArc(this.player.x, this.player.y, nearest.x, nearest.y, 0xffee22);
+
+    // Handle primary kill
+    if (nearest.health <= 0 && nearest !== this.boss) {
+      this.sfx.play('enemyDeath');
+      this.spawnDeathEffect(nearest.x, nearest.y);
+      this.spawnLootDrop(nearest.x, nearest.y);
+      if (nearest.enemyType) this.questManager.trackEvent('kill', { target: nearest.enemyType });
+      const r = ENEMY_REWARDS[nearest.enemyType] || { gold: 3, xp: 10 };
+      this.addGold(r.gold); this.addXP(r.xp);
+      if (nearest.enemyType && this.bestiary) this.bestiary[nearest.enemyType] = (this.bestiary[nearest.enemyType] || 0) + 1;
+      this._tryDropMaterial(nearest);
+      if (this.pet) this.petAffection = Math.min(50, (this.petAffection || 0) + 1);
+      this.updateQuestTracker();
+    }
+
+    // Chain to 2nd enemy within 100px of first
+    let chain = null;
+    let chainDist = Infinity;
+    for (const e of this.enemies.getChildren()) {
+      if (!e.active || !e.takeDamage || e === nearest || e.health <= 0) continue;
+      const d = Phaser.Math.Distance.Between(nearest.x, nearest.y, e.x, e.y);
+      if (d < 100 && d < chainDist) { chain = e; chainDist = d; }
+    }
+    if (chain) {
+      const chainDmg = chain.weakness === 'lightning' ? 4 : 2;
+      chain.takeDamage(chainDmg, nearest.x, nearest.y);
+      this.showDamageNumber(chain.x, chain.y - 8, chainDmg, chain.weakness === 'lightning' ? 'weakness' : 'magic');
+      this._drawLightningArc(nearest.x, nearest.y, chain.x, chain.y, 0xffee22);
+
+      if (chain.health <= 0 && chain !== this.boss) {
+        this.sfx.play('enemyDeath');
+        this.spawnDeathEffect(chain.x, chain.y);
+        this.spawnLootDrop(chain.x, chain.y);
+        if (chain.enemyType) this.questManager.trackEvent('kill', { target: chain.enemyType });
+        const r2 = ENEMY_REWARDS[chain.enemyType] || { gold: 3, xp: 10 };
+        this.addGold(r2.gold); this.addXP(r2.xp);
+        if (chain.enemyType && this.bestiary) this.bestiary[chain.enemyType] = (this.bestiary[chain.enemyType] || 0) + 1;
+        this._tryDropMaterial(chain);
+        if (this.pet) this.petAffection = Math.min(50, (this.petAffection || 0) + 1);
+        this.updateQuestTracker();
+      }
+    }
+  }
+
+  _drawLightningArc(x1, y1, x2, y2, color = 0xffee22) {
+    const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * 20;
+    const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * 20;
+    const g = this.add.graphics().setDepth(9992);
+    g.lineStyle(2, color, 0.9);
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(midX, midY);
+    g.lineTo(x2, y2);
+    g.strokePath();
+    this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
+  }
+
+  _tryDropMaterial(enemy) {
+    if (!enemy.enemyType) return;
+    const matId = MATERIAL_DROPS[enemy.enemyType];
+    if (!matId) return;
+    if (Math.random() > 0.2) return; // 20% chance
+
+    this.materials = this.materials || {};
+    this.materials[matId] = (this.materials[matId] || 0) + 1;
+
+    // Floating text
+    this.showFloatingText(enemy.x, enemy.y - 16, `+${matId.replace(/_/g, ' ')}`, '#ccff88');
+
+    // Quest tracking
+    this.questManager.trackEvent('collect_material', { materialId: matId });
+    this.updateQuestTracker();
   }
 
   _getOpenedChests() {
@@ -2727,6 +4083,24 @@ export class GameScene extends Phaser.Scene {
               paulRescued: true, // flag for notification
               playerAttackBonus: this.playerAttackBonus,
               unlockedTeleports: this.unlockedTeleports,
+              isNewGamePlus: this.isNewGamePlus,
+              starFragments: this.starFragments,
+              materials: this.materials,
+              darkSeals: this.darkSeals,
+              petAffection: this.petAffection,
+              visitedChunks: this.visitedChunks,
+              lichTowerUnlocked: this._lichTowerUnlocked,
+              achievements: this.achievements,
+              _craftCount: this._craftCount,
+              _fishCount: this._fishCount,
+              _totalGoldEarned: this._totalGoldEarned,
+              weather: this._currentWeather,
+              _regenBonus: this._regenBonus,
+              npcAffection: this.npcAffection,
+              storyChoices: this.storyChoices,
+              npcGiftGiven: this._npcGiftGiven,
+              fishLuckBonus: this._fishLuckBonus,
+              jackTreeChoice: this._jackTreeChoice,
             });
           });
         });
@@ -2916,7 +4290,10 @@ export class GameScene extends Phaser.Scene {
     // Color by type: gold for high damage, blue for magic, red default
     let color = '#ff4444';
     let scale = 1;
-    if (type === 'magic') {
+    if (type === 'weakness') {
+      color = '#ff8800'; // bright orange for elemental weakness
+      scale = 1.5;
+    } else if (type === 'magic') {
       color = '#88bbff';
     } else if (amount > 1) {
       color = '#ffdd00';
@@ -3371,6 +4748,24 @@ export class GameScene extends Phaser.Scene {
         escortNpcId: this._escortNPC ? this._escortNPC.npcId : null,
         playerAttackBonus: this.playerAttackBonus,
         unlockedTeleports: this.unlockedTeleports,
+        isNewGamePlus: this.isNewGamePlus,
+        starFragments: this.starFragments,
+        materials: this.materials,
+        darkSeals: this.darkSeals,
+        petAffection: this.petAffection,
+        visitedChunks: this.visitedChunks,
+        lichTowerUnlocked: this._lichTowerUnlocked,
+        achievements: this.achievements,
+        _craftCount: this._craftCount,
+        _fishCount: this._fishCount,
+        _totalGoldEarned: this._totalGoldEarned,
+        weather: this._currentWeather,
+        _regenBonus: this._regenBonus,
+        npcAffection: this.npcAffection,
+        storyChoices: this.storyChoices,
+        npcGiftGiven: this._npcGiftGiven,
+        fishLuckBonus: this._fishLuckBonus,
+        jackTreeChoice: this._jackTreeChoice,
       });
     });
   }
@@ -3406,6 +4801,214 @@ export class GameScene extends Phaser.Scene {
     });
     villager.setTint(0x99bb99); // Green tint for elder
     this.npcs.add(villager);
+
+    // Traveling Merchant NPC
+    const merchant = new NPC(this, 280, 180, 'miner-mike', {
+      id: 'town2_merchant',
+      name: 'Traveling Merchant',
+      idleAnim: 'npc-mike-idle-down',
+      wanders: true,
+      speed: 8,
+      wanderRadius: 20,
+      wanderAnims: { down: 'npc-mike-walk-down', right: 'npc-mike-walk-right', up: 'npc-mike-walk-up' },
+      dialogueLines: [
+        'I have rare wares!\nInterest you in anything?',
+        'Exotic goods from distant\nlands! Best prices around!',
+      ],
+    });
+    merchant.setTint(0xddaa55); // Gold tint for merchant
+    this.npcs.add(merchant);
+
+    // Notice Board (static NPC)
+    const board = new NPC(this, 380, 150, 'lumberjack-jack', {
+      id: 'town2_board',
+      name: 'Notice Board',
+      idleAnim: 'npc-jack-idle-down',
+      wanders: false,
+      dialogueLines: [
+        'WANTED: Forest Patrol\nSpeak with Ranger Reed.',
+        'LOST: One golden axe.\nSpeak with Lumberjack Jack.',
+        'NOTICE: Arena in cave\nBoss room. Champions welcome.',
+      ],
+    });
+    board.setTint(0xaa8844); // Wooden tint for board
+    board.setScale(0.8);
+    this.npcs.add(board);
+  }
+
+  spawnMountainNPCs() {
+    const rolf = new NPC(this, 120, 200, 'miner-mike', {
+      id: 'hermit_rolf',
+      name: 'Hermit Rolf',
+      idleAnim: 'npc-mike-idle-down',
+      wanders: false,
+      questId: 'yeti_hunt',
+      dialogueLines: ['The mountain is overrun\nwith yetis and ice skeletons!'],
+    });
+    rolf.setTint(0xaabbcc);
+    this.npcs.add(rolf);
+  }
+
+  spawnHarborNPCs() {
+    const captain = new NPC(this, 200, 200, 'lumberjack-jack', {
+      id: 'harbor_captain',
+      name: 'Captain Vex',
+      idleAnim: 'npc-jack-idle-down',
+      wanders: false,
+      questId: 'pirate_trouble',
+      dialogueLines: ['Pirate ghosts have taken\nover the harbor! Help us!'],
+    });
+    captain.setTint(0x8899bb);
+    this.npcs.add(captain);
+  }
+
+  spawnRuinsNPCs() {
+    const mort = new NPC(this, 160, 180, 'lumberjack-jack', {
+      id: 'gravekeeper_mort',
+      name: 'Gravekeeper Mort',
+      idleAnim: 'npc-jack-idle-down',
+      wanders: false,
+      questId: 'banish_undead',
+      dialogueLines: ['The ruins are full of\nthe walking dead. Drive them back!'],
+    });
+    mort.setTint(0x667755);
+    this.npcs.add(mort);
+
+    const vera = new NPC(this, 200, 220, 'miner-mike', {
+      id: 'alchemist_vera',
+      name: 'Alchemist Vera',
+      idleAnim: 'npc-mike-idle-down',
+      wanders: false,
+      dialogueLines: ['I can craft wondrous\nthings if you bring materials!'],
+    });
+    vera.setTint(0xaa88ff);
+    this.npcs.add(vera);
+  }
+
+  _openCraftingMenu() {
+    const lines = ['=== Alchemy ===', `Gold: ${this.gold}g`, ''];
+    CRAFTING_RECIPES.forEach((r, i) => {
+      const ingredients = r.ingredients.map(ing => {
+        const have = (this.materials[ing.material] || 0);
+        return `${ing.material.replace(/_/g, ' ')}(${have}/${ing.count})`;
+      }).join(', ');
+      lines.push(`${i + 1}) ${r.name} — ${ingredients}`);
+    });
+    lines.push('', 'Press 1-5 to craft');
+    this.showDialogue(lines, () => {}, 'Alchemist Vera', null);
+
+    for (let i = 0; i < Math.min(5, CRAFTING_RECIPES.length); i++) {
+      const recipe = CRAFTING_RECIPES[i];
+      const key = ['keydown-ONE', 'keydown-TWO', 'keydown-THREE', 'keydown-FOUR', 'keydown-FIVE'][i];
+      this.input.keyboard.once(key, () => this._doCraft(recipe));
+    }
+  }
+
+  _doCraft(recipe) {
+    // Check ingredients
+    for (const ing of recipe.ingredients) {
+      if ((this.materials[ing.material] || 0) < ing.count) {
+        this.sfx.play('menuCancel');
+        this.showNotification(`Need more ${ing.material.replace(/_/g, ' ')}!`);
+        return;
+      }
+    }
+    // Deduct
+    for (const ing of recipe.ingredients) {
+      this.materials[ing.material] -= ing.count;
+    }
+    // Apply result
+    const res = recipe.result;
+    if (res.type === 'item') {
+      this.inventory.addItem(res.id, res.count || 1);
+      this.events.emit('inventory-changed', this.inventory.slots);
+      this.showNotification(`Crafted: ${recipe.name}!`);
+    } else if (res.type === 'mana') {
+      this.player.mana = Math.min(this.player.maxMana, this.player.mana + res.amount);
+      this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+      this.showNotification(`+${res.amount} Mana!`);
+    } else if (res.type === 'equip') {
+      this.equipment.equip(res.id);
+      const hpBonus = this.equipment.getHPBonus();
+      if (hpBonus > 0 && this.player.maxHealth < 10 + hpBonus) {
+        this.player.maxHealth = 10 + hpBonus;
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      }
+      this.showNotification(`Equipped: ${res.id.replace(/_/g, ' ')}!`);
+    } else if (res.type === 'maxMana') {
+      this.player.maxMana = (this.player.maxMana || 10) + res.amount;
+      this.events.emit('mana-changed', this.player.mana, this.player.maxMana);
+      this.showNotification(`+${res.amount} Max Mana!`);
+    }
+    // Track crafting quest + achievement
+    this.questManager.trackEvent('craft', { id: recipe.id });
+    this.updateQuestTracker();
+    this._craftCount = (this._craftCount || 0) + 1;
+    this._checkAchievements();
+    this.sfx.play('questComplete');
+  }
+
+  // Generic chain: finds the first quest in the chain that isn't completed and shows its dialogue
+  _handleChainedQuests(nearestNPC, questIds, name, portrait) {
+    for (const qid of questIds) {
+      const q = this.questManager.getQuest(qid);
+      if (!q) continue;
+      if (q.state === 'available') {
+        this.showDialogue(q.dialogue.available, () => {
+          this.questManager.acceptQuest(qid);
+          this.updateQuestTracker();
+          this.showNotification('Quest: ' + q.name);
+          this.sfx.play('questAccept');
+        }, name, portrait);
+        return;
+      }
+      if (q.state === 'active') {
+        this.showDialogue(q.dialogue.active, null, name, portrait);
+        return;
+      }
+      if (q.state === 'ready') {
+        this.showDialogue(q.dialogue.ready, () => {
+          this.giveQuestReward(qid);
+          this.questManager.completeQuest(qid);
+          this.updateQuestTracker();
+          this.showNotification('Quest Complete!');
+          this.sfx.play('questComplete');
+        }, name, portrait);
+        return;
+      }
+      // completed: try next in chain
+    }
+    // All done
+    this.showDialogue(['Thank you for all your help!\nThe region is at peace.'], null, name, portrait);
+  }
+
+  _openMerchantShop() {
+    const dayPhase = this.dayTime < 0.4 ? 0 : this.dayTime < 0.7 ? 1 : 2;
+    const stock = [
+      [{ label: 'Health Potion', id: 'health_potion', cost: 30 }, { label: 'Shield Potion', id: 'shield_potion', cost: 40 }, { label: 'Speed Potion', id: 'speed_potion', cost: 35 }],
+      [{ label: 'Shield Potion', id: 'shield_potion', cost: 45 }, { label: 'Health Potion', id: 'health_potion', cost: 25 }, { label: 'Speed Potion', id: 'speed_potion', cost: 32 }],
+      [{ label: 'Speed Potion', id: 'speed_potion', cost: 28 }, { label: 'Health Potion', id: 'health_potion', cost: 35 }, { label: 'Shield Potion', id: 'shield_potion', cost: 50 }],
+    ][dayPhase];
+
+    const lines = [`Gold: ${this.gold}g`, '', ...stock.map((s, i) => `${i + 1}) ${s.label} — ${s.cost}g`)];
+    this.showDialogue(lines, () => {}, 'Merchant', null);
+
+    const buyItem = (item) => {
+      if (this.gold >= item.cost) {
+        this.gold -= item.cost;
+        this.events.emit('gold-changed', this.gold);
+        this.inventory.addItem(item.id, 1);
+        this.events.emit('inventory-changed', this.inventory.slots);
+        this.sfx.play('pickup');
+        this.showNotification(`Bought: ${item.label}`);
+      } else {
+        this.sfx.play('menuCancel');
+        this.showNotification('Not enough gold!');
+      }
+    };
+    this.input.keyboard.once('keydown-ONE', () => buyItem(stock[0]));
+    this.input.keyboard.once('keydown-TWO', () => buyItem(stock[1]));
+    this.input.keyboard.once('keydown-THREE', () => buyItem(stock[2]));
   }
 
   _getVariedDialogue(npc, defaultLines) {
@@ -3573,6 +5176,534 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // --- Achievement system ---
+  _checkAchievements() {
+    const qm = this.questManager;
+    if (!qm) return;
+    const bestiary = this.bestiary || {};
+    const bossQuests = ['clear_cave', 'clear_temple', 'clear_forest', 'clear_mountain', 'clear_harbor', 'clear_ruins'];
+
+    for (const ach of ACHIEVEMENTS) {
+      if (this.achievements[ach.id]) continue;
+      let earned = false;
+
+      switch (ach.id) {
+        case 'first_blood':
+          earned = Object.values(bestiary).some(v => v > 0);
+          break;
+        case 'boss_slayer':
+          earned = bossQuests.every(qid => qm.getQuest(qid)?.state === 'completed');
+          break;
+        case 'lich_vanquished':
+          earned = qm.getQuest('defeat_lich')?.state === 'completed';
+          break;
+        case 'crafter':
+          earned = (this._craftCount || 0) >= 3;
+          break;
+        case 'angler':
+          earned = (this._fishCount || 0) >= 10;
+          break;
+        case 'hoarder':
+          earned = (this._totalGoldEarned || 0) >= 1000;
+          break;
+        case 'explorer':
+          earned = Object.keys(this.visitedChunks || {}).length >= 20;
+          break;
+        case 'true_hero':
+          earned = (this.starFragments || 0) >= 3 && qm.getQuest('defeat_lich')?.state === 'completed';
+          break;
+        case 'storyteller':
+          earned = !!(this.storyChoices?.bob && this.storyChoices?.mike &&
+                      this.storyChoices?.fin && this.storyChoices?.jack);
+          break;
+      }
+
+      if (earned) {
+        this.achievements[ach.id] = Date.now();
+        this.showNotification(`Achievement: ${ach.label}!`);
+        this.sfx.play('levelUp');
+      }
+    }
+  }
+
+  // --- Goblin raid event ---
+  _triggerGoblinRaid() {
+    this._raidActive = true;
+    this.showNotification('\u26a0 Goblins are raiding Greendale!');
+    this.sfx.play('menuCancel');
+
+    // Spawn goblins at map edges near town
+    const spawnPoints = [
+      { x: 40, y: 200 }, { x: 40, y: 380 },
+      { x: 200, y: 760 }, { x: 400, y: 760 },
+      { x: 100, y: 100 }, { x: 160, y: 60 },
+      { x: 900, y: 200 },
+    ];
+    this.raidEnemies = this.raidEnemies || this.physics.add.group();
+
+    const toSpawn = Phaser.Utils.Array.Shuffle([...spawnPoints]).slice(0, 7);
+    let archers = 0, goblins = 0;
+    for (const pos of toSpawn) {
+      if (archers < 4) {
+        const a = this.spawnGoblinArcher(pos.x, pos.y);
+        if (a) { this.raidEnemies.add(a); archers++; }
+      } else {
+        const g = this.spawnGoblin(pos.x, pos.y);
+        if (g) { this.raidEnemies.add(g); goblins++; }
+      }
+    }
+
+    // 90-second timeout
+    this.time.delayedCall(90000, () => {
+      if (this._raidActive) {
+        this._raidActive = false;
+        const stillAlive = this.raidEnemies?.getChildren().filter(e => e.active && e.health > 0).length || 0;
+        if (stillAlive > 0) {
+          this.showNotification('Raid succeeded... Greendale suffered losses.');
+        } else {
+          this.showNotification('Raid repelled! +100g +150xp');
+          this.addGold(100);
+          this.addXP(150);
+        }
+      }
+    });
+  }
+
+  // --- Elemental Arrow ---
+  _fireElementalArrow() {
+    if ((this.arrowCount || 0) <= 0) return;
+    this.arrowCount--;
+
+    // Find nearest enemy within 150px
+    let target = null;
+    let nearestDist = 150;
+    this.enemies.getChildren().forEach(e => {
+      if (!e.active || !e.health || e.health <= 0) return;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y);
+      if (d < nearestDist) { target = e; nearestDist = d; }
+    });
+
+    const dirs = { down: { x: 0, y: 1 }, up: { x: 0, y: -1 }, right: { x: 1, y: 0 }, left: { x: -1, y: 0 } };
+    let d = dirs[this.player.direction] || { x: 1, y: 0 };
+    if (target) {
+      const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
+      d = { x: Math.cos(angle), y: Math.sin(angle) };
+    }
+
+    const arrow = this.add.rectangle(
+      this.player.x + d.x * 12,
+      this.player.y + d.y * 12,
+      6, 3, 0xff4400, 0.95
+    );
+    arrow.setDepth(9999);
+    this.physics.add.existing(arrow, false);
+    arrow.body.setVelocity(d.x * 220, d.y * 220);
+    arrow.body.setAllowGravity(false);
+
+    // Destroy after range
+    this.time.delayedCall(700, () => { if (arrow.active) arrow.destroy(); });
+
+    // Hit detection
+    this.physics.add.overlap(arrow, this.enemies, (_, enemy) => {
+      if (!arrow.active || !enemy.active || !enemy.health || enemy.health <= 0) return;
+      arrow.destroy();
+      let dmg = 3;
+      if (enemy.weakness === 'fire') dmg *= 2;
+      enemy.takeDamage(dmg, this.player.x, this.player.y);
+      this.showDamageNumber(enemy.x, enemy.y - 8, dmg);
+      const pop = this.add.circle(enemy.x, enemy.y, 6, 0xff4400, 0.7);
+      pop.setDepth(9999);
+      this.tweens.add({ targets: pop, scale: 2, alpha: 0, duration: 200, onComplete: () => pop.destroy() });
+    });
+
+    this.sfx.play('fireball');
+    this.showNotification(`Fire Arrows: ${this.arrowCount} left`);
+  }
+
+  // --- Wandering Merchant ---
+  _spawnWanderingMerchant() {
+    const px = 200 + Math.random() * 300;
+    const py = 200 + Math.random() * 100;
+    const merchant = new NPC(this, px, py, 'miner-mike', {
+      id: 'wandering_merchant',
+      name: 'Wandering Merchant',
+      wanders: true,
+      speed: 15,
+      wanderRadius: 60,
+    });
+    merchant.setTint(0xffee44);
+    this.npcs.add(merchant);
+    this._wanderingMerchant = merchant;
+    this._merchantStock = null; // will be picked first shop open
+    this.showNotification('A wandering merchant has appeared!');
+    this.sfx.play('questAccept');
+    // Auto-despawn after 3 minutes
+    this.time.delayedCall(180000, () => this._despawnWanderingMerchant());
+  }
+
+  _despawnWanderingMerchant() {
+    if (this._wanderingMerchant && this._wanderingMerchant.active) {
+      this._wanderingMerchant.prompt?.destroy();
+      this._wanderingMerchant.questIcon?.destroy();
+      this._wanderingMerchant.destroy();
+    }
+    this._wanderingMerchant = null;
+    this._merchantStock = null;
+    this._merchantTimer = 0;
+  }
+
+  _openWanderingMerchantShop() {
+    const MERCHANT_POOL = [
+      { id: 'star_potion',     name: 'Star Potion',    price: 75,  color: '#ffdd88', type: 'star_potion',  desc: 'Restore all mana' },
+      { id: 'rune_stone',      name: 'Rune Stone',     price: 120, color: '#8844ff', type: 'rune',         desc: '+1 max mana' },
+      { id: 'magic_seed',      name: 'Magic Seed',     price: 90,  color: '#44ee44', type: 'magic_seed',   desc: '+1 HP regen/5s' },
+      { id: 'ancient_map',     name: 'Ancient Map',    price: 60,  color: '#ccbb77', type: 'ancient_map',  desc: 'Reveal current map' },
+      { id: 'elemental_arrow', name: 'Fire Arrows x5', price: 50,  color: '#ff6622', type: 'arrow',        desc: 'Fire damage' },
+      { id: 'speed_crystal',   name: 'Speed Crystal',  price: 80,  color: '#aaddff', type: 'speed_crystal',desc: '+10% speed perm' },
+    ];
+    if (!this._merchantStock) {
+      this._merchantStock = Phaser.Utils.Array.Shuffle([...MERCHANT_POOL]).slice(0, 3);
+    }
+    const shopItems = this._merchantStock;
+
+    this.inDialogue = true;
+    this.player.setVelocity(0, 0);
+
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const itemCount = shopItems.length;
+    const boxW = w - 24;
+    const boxH = 28 + itemCount * 14;
+    const boxX = w / 2;
+    const boxY = h - boxH / 2 - 8;
+
+    this.shopContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(10000);
+    const bg = this.add.nineslice(boxX, boxY, 'ui-frames', 'panel-yellow', boxW, boxH, 8, 8, 8, 8);
+    this.shopContainer.add(bg);
+
+    const title = this.add.text(boxX, boxY - boxH / 2 + 6, `Wandering Merchant  (Gold: ${this.gold})`, {
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#3d2510',
+    }).setOrigin(0.5, 0);
+    this.shopContainer.add(title);
+
+    shopItems.forEach((item, i) => {
+      const y = boxY - boxH / 2 + 20 + i * 14;
+      const label = this.add.text(20, y, `${i + 1}: ${item.name} (${item.desc})`, {
+        fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#2a1a08',
+      }).setScrollFactor(0);
+      const price = this.add.text(w - 20, y, `${item.price}g`, {
+        fontSize: '12px', fontFamily: 'Arial, sans-serif',
+        color: this.gold >= item.price ? '#2a1a08' : '#999999',
+      }).setOrigin(1, 0).setScrollFactor(0);
+      this.shopContainer.add(label);
+      this.shopContainer.add(price);
+    });
+
+    const hint = this.add.text(boxX, boxY + boxH / 2 - 6, 'ESC to close', {
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#8b6d4a',
+    }).setOrigin(0.5, 1).setScrollFactor(0);
+    this.shopContainer.add(hint);
+
+    this._shopActive = true;
+    this._shopItems = shopItems;
+    this._shopNPC = this._wanderingMerchant;
+    this._isWanderingMerchantShop = true;
+    this._shopEscKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this._shopExtraKeys = [];
+
+    // Despawn 1 min after first talk
+    if (!this._merchantTalkTimer) {
+      this._merchantTalkTimer = true;
+      this.time.delayedCall(60000, () => this._despawnWanderingMerchant());
+    }
+  }
+
+  // --- Weather System ---
+  _changeWeather(newWeather) {
+    // Clear existing weather effects
+    if (this._weatherParticles) {
+      this._weatherParticles.forEach(p => { try { if (p && p.active) p.destroy(); } catch(_) {} });
+    }
+    this._weatherParticles = [];
+    if (this._weatherInterval) { this._weatherInterval.remove(false); this._weatherInterval = null; }
+
+    const wasWeather = this._currentWeather;
+    this._currentWeather = newWeather;
+
+    // Restore enemy detection ranges if clearing bad weather
+    if (wasWeather === 'rain' || wasWeather === 'fog') {
+      this.enemies.getChildren().forEach(e => {
+        if (e._weatherDetectReduced) {
+          e.detectRange = e._origDetectRange || 80;
+          e._weatherDetectReduced = false;
+        }
+      });
+    }
+    if (wasWeather === 'snow' && this.player?._blizzardSlowed) {
+      this.player.speed = this.player._baseSpeed || this.player.speed;
+      this.player._blizzardSlowed = false;
+    }
+
+    if (newWeather === 'clear') {
+      this.showNotification('The weather clears up.');
+      return;
+    }
+
+    if (newWeather === 'rain') {
+      this.showNotification('It starts to rain...');
+      this.enemies.getChildren().forEach(e => {
+        if (!e._weatherDetectReduced) {
+          e._origDetectRange = e.detectRange || 80;
+          e.detectRange = Math.round((e.detectRange || 80) * 0.5);
+          e._weatherDetectReduced = true;
+        }
+      });
+      // Spawn initial drops and keep interval
+      for (let i = 0; i < 20; i++) this._spawnRainDrop();
+      this._weatherInterval = this.time.addEvent({
+        delay: 150,
+        callback: () => { if (this._currentWeather === 'rain') this._spawnRainDrop(); },
+        loop: true,
+      });
+    } else if (newWeather === 'snow') {
+      this.showNotification('A blizzard rolls in...');
+      if (this.player) {
+        this.player._baseSpeed = this.player._baseSpeed || this.player.speed;
+        this.player.speed = Math.round(this.player._baseSpeed * 0.9);
+        this.player._blizzardSlowed = true;
+      }
+    } else if (newWeather === 'fog') {
+      this.showNotification('Fog rolls in from the sea...');
+      this.enemies.getChildren().forEach(e => {
+        if (!e._weatherDetectReduced) {
+          e._origDetectRange = e.detectRange || 80;
+          e.detectRange = Math.round((e.detectRange || 80) * 0.5);
+          e._weatherDetectReduced = true;
+        }
+      });
+      this._weatherInterval = this.time.addEvent({
+        delay: 300,
+        callback: () => {
+          if (this._currentWeather !== 'fog') { this._weatherInterval?.remove(false); return; }
+          const cam = this.cameras.main;
+          const fx = cam.scrollX + Math.random() * cam.width;
+          const fy = cam.scrollY + Math.random() * cam.height;
+          const fog = this.add.circle(fx, fy, 8, 0xffffff, 0.04);
+          fog.setDepth(9990);
+          this.tweens.add({ targets: fog, x: fx + 15, alpha: 0, duration: 4000, onComplete: () => fog.destroy() });
+        },
+        loop: true,
+      });
+    }
+  }
+
+  _spawnRainDrop() {
+    const cam = this.cameras.main;
+    const rx = cam.scrollX + Math.random() * cam.width;
+    const drop = this.add.rectangle(rx, cam.scrollY - 4, 1, 6, 0xaaddff, 0.6);
+    drop.setDepth(9990);
+    this.tweens.add({
+      targets: drop,
+      y: cam.scrollY + cam.height + 10,
+      x: rx + 8,
+      alpha: 0.2,
+      duration: 600 + Math.random() * 400,
+      onComplete: () => { try { if (drop.active) drop.destroy(); } catch(_) {} },
+    });
+  }
+
+  // --- Paul the Wizard Battle Assist ---
+  _paulBattleHelp(nearbyEnemies) {
+    if (this._paulHelping || this._paulRescueActive) return;
+    this._paulHelping = true;
+
+    const cam = this.cameras.main;
+    const paulSX = cam.width - 28;  // screen-space x (right edge)
+    const paulSY = 60;              // screen-space y (just below HUD)
+
+    // Paul sprite (screen-space)
+    const paulSprite = this.add.sprite(paulSX, paulSY, 'miner-mike', 0);
+    paulSprite.setTint(0x9966ff).setScale(1.0).setAlpha(0).setDepth(10001).setScrollFactor(0);
+
+    // Wizard hat (screen-space graphics)
+    const hat = this.add.graphics().setDepth(10002).setScrollFactor(0);
+    hat.setAlpha(0);
+    const hatX = paulSX;
+    const hatY = paulSY - 22;
+    hat.fillStyle(0x5522aa);  hat.fillEllipse(hatX, hatY + 2, 18, 4);
+    hat.fillStyle(0x6633cc);  hat.fillTriangle(hatX, hatY - 11, hatX - 6, hatY + 1, hatX + 6, hatY + 1);
+    hat.fillStyle(0xffdd00);  hat.fillCircle(hatX, hatY - 4, 1.5);
+
+    // "Paul" name tag
+    const nameTag = this.add.text(paulSX, paulSY + 20, 'Paul', {
+      fontSize: '9px', fontFamily: 'Arial, sans-serif',
+      color: '#cc88ff', stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(10001).setAlpha(0).setScrollFactor(0);
+
+    // Fade Paul in
+    this.tweens.add({ targets: [paulSprite, hat, nameTag], alpha: 1, duration: 250 });
+
+    // Magic sparkle around Paul while he charges
+    for (let i = 0; i < 5; i++) {
+      this.time.delayedCall(i * 60, () => {
+        if (!paulSprite.active) return;
+        const sx = paulSX + (Math.random() - 0.5) * 22;
+        const sy = paulSY + (Math.random() - 0.5) * 22;
+        const spark = this.add.circle(sx, sy, 1.5, 0xcc88ff, 0.8).setScrollFactor(0).setDepth(10003);
+        this.tweens.add({ targets: spark, alpha: 0, y: sy - 8, duration: 300, onComplete: () => spark.destroy() });
+      });
+    }
+
+    // Execute assist after brief pause
+    this.time.delayedCall(450, () => {
+      if (!this.player?.active) { this._paulHelping = false; paulSprite.destroy(); hat.destroy(); nameTag.destroy(); return; }
+      this._executePaulAssist(nearbyEnemies, cam, paulSX, paulSY);
+
+      // Fade Paul out after the effect
+      this.time.delayedCall(1400, () => {
+        this.tweens.add({
+          targets: [paulSprite, hat, nameTag],
+          alpha: 0,
+          duration: 300,
+          onComplete: () => {
+            paulSprite.destroy();
+            hat.destroy();
+            nameTag.destroy();
+            this._paulHelping = false;
+          },
+        });
+      });
+    });
+  }
+
+  _executePaulAssist(nearbyEnemies, cam, paulSX, paulSY) {
+    const assists = ['fireball', 'heal', 'freeze', 'shield'];
+    const available = assists.filter(a => a !== 'heal' || this.player.health < this.player.maxHealth);
+    const type = available[Math.floor(Math.random() * available.length)];
+
+    const quips = {
+      fireball: ["I've got a spell for that!", "Arcane fire, away!"],
+      heal:     ["Stay strong, Lizzy!", "Healing light!"],
+      freeze:   ["Cool it, you lot!", "Let's chill things down!"],
+      shield:   ["I've got your back!", "Shield of the arcane!"],
+    };
+    const q = quips[type];
+    this.showNotification(`Paul: "${q[Math.floor(Math.random() * q.length)]}"`);
+
+    if (type === 'fireball') {
+      const target = nearbyEnemies.find(e => e.active && e.health > 0);
+      if (!target) return;
+      this.sfx.play('fireball');
+
+      // World-space start point at Paul's screen position
+      const fbX = cam.scrollX + paulSX;
+      const fbY = cam.scrollY + paulSY;
+      const fb = this.add.circle(fbX, fbY, 5, 0xaa44ff, 0.95);
+      fb.setDepth(10000);
+      this.physics.add.existing(fb, false);
+      const angle = Phaser.Math.Angle.Between(fbX, fbY, target.x, target.y);
+      fb.body.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
+      fb.body.setAllowGravity(false);
+
+      // Trail
+      const trailTimer = this.time.addEvent({
+        delay: 25,
+        callback: () => {
+          if (!fb.active) { trailTimer.remove(); return; }
+          const t = this.add.circle(fb.x, fb.y, 3, 0xcc66ff, 0.5);
+          t.setDepth(9999);
+          this.tweens.add({ targets: t, alpha: 0, scale: 0.2, duration: 180, onComplete: () => t.destroy() });
+        },
+        loop: true,
+      });
+
+      // Hit detection
+      this.physics.add.overlap(fb, this.enemies, (ball, enemy) => {
+        if (!ball.active || !enemy.active || !enemy.health || enemy.health <= 0) return;
+        ball.destroy();
+        trailTimer.remove();
+        enemy.takeDamage(3, fbX, fbY);
+        this.showDamageNumber(enemy.x, enemy.y - 8, 3, 'magic');
+        const burst = this.add.circle(enemy.x, enemy.y, 8, 0xaa44ff, 0.7);
+        burst.setDepth(9999);
+        this.tweens.add({ targets: burst, scale: 2.5, alpha: 0, duration: 250, onComplete: () => burst.destroy() });
+      });
+      this.time.delayedCall(900, () => { if (fb.active) { fb.destroy(); trailTimer.remove(); } });
+
+    } else if (type === 'heal') {
+      const healed = Math.min(2, this.player.maxHealth - this.player.health);
+      if (healed > 0) {
+        this.player.health += healed;
+        this.events.emit('player-health-changed', this.player.health, this.player.maxHealth);
+      }
+      this.sfx.play('heal');
+      this.showFloatingText(this.player.x, this.player.y - 20, `+${healed} HP`, '#cc88ff');
+      // Purple healing particles
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const p = this.add.circle(this.player.x, this.player.y, 2, 0xaa66ff, 0.8).setDepth(9999);
+        this.tweens.add({
+          targets: p,
+          x: this.player.x + Math.cos(a) * 16,
+          y: this.player.y + Math.sin(a) * 16 - 8,
+          alpha: 0, duration: 450,
+          onComplete: () => p.destroy(),
+        });
+      }
+
+    } else if (type === 'freeze') {
+      this.sfx.play('select');
+      nearbyEnemies.forEach(e => {
+        if (!e.active || e.health <= 0 || e._frozen) return;
+        e._frozen = true;
+        e.setTint(0x88ccff);
+        const origDetect = e.detectRange;
+        const origSpeed = e.speed;
+        e.detectRange = 0;
+        e.speed = 0;
+        e.body?.setVelocity(0, 0);
+        this.time.delayedCall(3000, () => {
+          if (e.active) { e._frozen = false; e.clearTint(); e.detectRange = origDetect; e.speed = origSpeed; }
+        });
+      });
+      // Ice blast ring expanding from player
+      const ring = this.add.circle(this.player.x, this.player.y, 8, 0x88ccff, 0.4).setDepth(9999);
+      this.tweens.add({ targets: ring, scale: 6, alpha: 0, duration: 500, onComplete: () => ring.destroy() });
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const s = this.add.circle(this.player.x, this.player.y, 2, 0xffffff, 0.9).setDepth(9999);
+        this.tweens.add({
+          targets: s,
+          x: this.player.x + Math.cos(a) * 45,
+          y: this.player.y + Math.sin(a) * 45,
+          alpha: 0, duration: 600,
+          onComplete: () => s.destroy(),
+        });
+      }
+
+    } else if (type === 'shield') {
+      this.sfx.play('select');
+      this.player.invulnerable = true;
+      this.player.setTint(0xcc88ff);
+      const shield = this.add.circle(this.player.x, this.player.y, 16, 0xaa66ff, 0.35).setDepth(9999);
+      const followTimer = this.time.addEvent({
+        delay: 16,
+        callback: () => {
+          if (!shield.active || !this.player?.active) return;
+          shield.x = this.player.x;
+          shield.y = this.player.y;
+        },
+        loop: true,
+      });
+      this.tweens.add({ targets: shield, scaleX: 1.1, scaleY: 1.1, alpha: 0.2, duration: 400, yoyo: true, repeat: 4 });
+      this.time.delayedCall(4000, () => {
+        followTimer.remove();
+        if (this.player?.active) { this.player.invulnerable = false; this.player.clearTint(); }
+        if (shield.active) this.tweens.add({ targets: shield, alpha: 0, duration: 200, onComplete: () => shield.destroy() });
+      });
+    }
+  }
+
   update(time, delta) {
     // Pause menu
     // Game menu handles its own input when open
@@ -3654,11 +5785,31 @@ export class GameScene extends Phaser.Scene {
 
     this.player.update(time, delta);
 
+    // Track visited chunks for fog-of-war
+    {
+      const chunkSize = this.isOverworld ? 128 : 64;
+      const cx = Math.floor(this.player.x / chunkSize);
+      const cy = Math.floor(this.player.y / chunkSize);
+      const key = `${cx},${cy}`;
+      const mapName = this.mapData.name;
+      if (!this.visitedChunks[mapName]) this.visitedChunks[mapName] = [];
+      if (!this.visitedChunks[mapName].includes(key)) {
+        this.visitedChunks[mapName].push(key);
+        // Check explorer achievement periodically
+        if (this.visitedChunks[mapName].length % 5 === 0) this._checkAchievements();
+      }
+    }
+
     // Item hotbar
     for (let i = 0; i < this.itemKeys.length; i++) {
       if (Phaser.Input.Keyboard.JustDown(this.itemKeys[i])) {
         this.useItem(i);
       }
+    }
+
+    // Elemental arrows (R key)
+    if (this._rKey && Phaser.Input.Keyboard.JustDown(this._rKey) && (this.arrowCount || 0) > 0) {
+      this._fireElementalArrow();
     }
 
     // Fishing minigame update
@@ -3704,11 +5855,13 @@ export class GameScene extends Phaser.Scene {
 
     // NPC interaction / chest / fishing
     if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-      // Priority: NPC > Chest > Fishing
+      // Priority: NPC > Arena Crystal > Chest > Fishing
       let npcNearby = false;
       this.npcs.getChildren().forEach((n) => { if (n.canInteract) npcNearby = true; });
       if (npcNearby) {
         this.handleNPCInteraction();
+      } else if (this._arenaCrystal && !this.inDialogue) {
+        this._checkArenaCrystalInteract();
       } else if (this.handleChestOpen()) {
         // Chest was opened
       } else if (this._handleBedRest()) {
@@ -3716,7 +5869,9 @@ export class GameScene extends Phaser.Scene {
       } else if (this._handleBookshelf()) {
         // Bookshelf was read
       } else if (this._nearPond && this.isOverworld) {
-        this.fishingGame.start();
+        this.fishingGame.start(this.level, false);
+      } else if (this._nearHarborDock) {
+        this.fishingGame.start(this.level, true);
       }
     }
 
@@ -3754,6 +5909,53 @@ export class GameScene extends Phaser.Scene {
       // Pet bark ability (P key)
       if (Phaser.Input.Keyboard.JustDown(this.petBarkKey)) {
         this.pet.bark(this);
+      }
+
+      // Pet affection tiers
+      if ((this.petAffection || 0) >= 10) {
+        this._petAbilityTimer = (this._petAbilityTimer || 0) - delta;
+        if (this._petAbilityTimer <= 0) {
+          const aff = this.petAffection;
+          if (aff >= 50) {
+            // Tier 3: sparkle aura around pet
+            this._petAbilityTimer = 400;
+            const sp = this.add.circle(
+              this.pet.x + (Math.random() - 0.5) * 10,
+              this.pet.y + (Math.random() - 0.5) * 10,
+              2, 0xffdd44, 0.8
+            );
+            sp.setDepth(9999);
+            this.tweens.add({ targets: sp, y: sp.y - 10, alpha: 0, duration: 300, onComplete: () => sp.destroy() });
+          } else if (aff >= 25) {
+            // Tier 2: pulse glow on nearby chests
+            this._petAbilityTimer = 800;
+            this.chests.getChildren().forEach(chest => {
+              if (chest.opened) return;
+              const cd = Phaser.Math.Distance.Between(this.pet.x, this.pet.y, chest.x, chest.y);
+              if (cd < 32) {
+                this.tweens.add({ targets: chest, alpha: { from: 1, to: 0.5 }, duration: 200, yoyo: true });
+              }
+            });
+          } else {
+            // Tier 1: 20% chance to attack nearest enemy within 48px
+            this._petAbilityTimer = 1000;
+            if (Math.random() < 0.2) {
+              let nearestE = null;
+              let nearestD = 48;
+              this.enemies.getChildren().forEach(e => {
+                if (!e.active || !e.health || e.health <= 0) return;
+                const ed = Phaser.Math.Distance.Between(this.pet.x, this.pet.y, e.x, e.y);
+                if (ed < nearestD) { nearestE = e; nearestD = ed; }
+              });
+              if (nearestE) {
+                nearestE.takeDamage(1, this.pet.x, this.pet.y);
+                const ps = this.add.circle(nearestE.x, nearestE.y, 4, 0xffdd44, 0.8);
+                ps.setDepth(9999);
+                this.tweens.add({ targets: ps, scale: 0, alpha: 0, duration: 200, onComplete: () => ps.destroy() });
+              }
+            }
+          }
+        }
       }
     }
 
@@ -3835,6 +6037,62 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Goblin raid event (overworld, day only, every 3 min)
+    if (this.isOverworld && !this._raidActive) {
+      this._overworldTime = (this._overworldTime || 0) + delta;
+      this._raidCooldown = (this._raidCooldown || 0) - delta;
+      if (this._overworldTime > 180000 && this._raidCooldown <= 0 && this.dayTime > 0.25 && this.dayTime < 0.8) {
+        this._overworldTime = 0;
+        this._raidCooldown = 300000;
+        this._triggerGoblinRaid();
+      }
+    }
+
+    // Wandering merchant timer (overworld only, every 5 min)
+    if (this.isOverworld && !this._wanderingMerchant) {
+      this._merchantTimer = (this._merchantTimer || 0) + delta;
+      if (this._merchantTimer > 300000) {
+        this._merchantTimer = 0;
+        this._spawnWanderingMerchant();
+      }
+    }
+
+    // Weather change timer (every 4 min, 30% chance to toggle)
+    this._weatherTimer = (this._weatherTimer || 0) + delta;
+    if (this._weatherTimer > 240000) {
+      this._weatherTimer = 0;
+      if (Math.random() < 0.3) {
+        const biome = this.isOverworld ? 'overworld' : this.isForest ? 'forest' :
+          this.isMountain ? 'mountain' : this.isHarbor ? 'harbor' :
+          this.isRuins ? 'ruins' : null;
+        if (biome) {
+          const weatherByBiome = { overworld: 'rain', forest: 'rain', mountain: 'snow', harbor: 'fog', ruins: 'rain' };
+          const newWeather = this._currentWeather === 'clear' ? weatherByBiome[biome] : 'clear';
+          if (newWeather) this._changeWeather(newWeather);
+        }
+      }
+    }
+
+    // Paul the Wizard random battle assist
+    if (!this.inDialogue && !this._shopActive && !this._paulHelping && !this._paulRescueActive && this.player?.active) {
+      if (this._paulHelpCooldown > 0) this._paulHelpCooldown -= delta;
+      const combatEnemies = this.enemies.getChildren().filter(e =>
+        e.active && e.health > 0 &&
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y) < 120
+      );
+      if (combatEnemies.length > 0 && this._paulHelpCooldown <= 0) {
+        this._paulCombatTimer = (this._paulCombatTimer || 0) + delta;
+        if (this._paulCombatTimer >= this._paulHelpThreshold) {
+          this._paulCombatTimer = 0;
+          this._paulHelpThreshold = 20000 + Math.random() * 10000;
+          this._paulHelpCooldown = 40000 + Math.random() * 15000;
+          this._paulBattleHelp(combatEnemies);
+        }
+      } else if (combatEnemies.length === 0) {
+        this._paulCombatTimer = 0;
+      }
+    }
+
     // Day/night cycle update
     if (this.dayOverlay) {
       this.dayTime += (delta / 1000) * this.daySpeed;
@@ -3865,11 +6123,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Check if near pond for fishing
+    this._nearHarborDock = false;
     if (this.isOverworld) {
       const pondCX = 35.5 * 16;
       const pondCY = 18 * 16;
       const dPond = Phaser.Math.Distance.Between(this.player.x, this.player.y, pondCX, pondCY);
       this._nearPond = dPond < 50;
+    }
+    // Harbor fishing spot
+    if (this.isHarbor && this.mapData.hasFishingSpot) {
+      const distDock = Phaser.Math.Distance.Between(this.player.x, this.player.y, 320, 60);
+      this._nearHarborDock = distDock < 40;
     }
 
     // Water shimmer (overworld)
@@ -3941,6 +6205,82 @@ export class GameScene extends Phaser.Scene {
           alpha: 0, duration: 2500,
           onComplete: () => sand.destroy(),
         });
+      } else if (this.isMountain) {
+        // Snowflakes drifting down
+        this._ambientTimer = 600;
+        for (let si = 0; si < 2; si++) {
+          const sx = cx + (Math.random() - 0.5) * cam.width;
+          const sy = cy + (Math.random() - 0.5) * cam.height * 0.6;
+          const snow = this.add.circle(sx, sy, 1.5, 0xffffff, 0.6);
+          snow.setDepth(9990);
+          this.tweens.add({
+            targets: snow,
+            y: sy + 25 + Math.random() * 20,
+            x: sx + (Math.random() - 0.5) * 10,
+            alpha: 0, duration: 2000,
+            onComplete: () => snow.destroy(),
+          });
+        }
+      } else if (this.isHarbor) {
+        // Blue sparkles rising + foam drifting
+        this._ambientTimer = 700;
+        const hx = cx + (Math.random() - 0.5) * cam.width;
+        const hy = cy + (Math.random() - 0.5) * cam.height;
+        const sparkle = this.add.circle(hx, hy, 2, 0xaaddff, 0.7);
+        sparkle.setDepth(9990);
+        this.tweens.add({
+          targets: sparkle,
+          y: hy - 18,
+          alpha: 0, duration: 1500,
+          onComplete: () => sparkle.destroy(),
+        });
+        // Foam dot near water line
+        const foamY = cam.scrollY + 20 + Math.random() * 30;
+        const foamX = cx + (Math.random() - 0.5) * cam.width;
+        const foam = this.add.circle(foamX, foamY, 1.5, 0xffffff, 0.5);
+        foam.setDepth(9990);
+        this.tweens.add({
+          targets: foam,
+          x: foamX + 20,
+          alpha: 0, duration: 2000,
+          onComplete: () => foam.destroy(),
+        });
+      } else if (this.isRuins) {
+        // Purple spores drifting up
+        this._ambientTimer = 800;
+        for (let ri = 0; ri < 2; ri++) {
+          const rx = cx + (Math.random() - 0.5) * cam.width;
+          const ry = cy + (Math.random() - 0.5) * cam.height;
+          const spore = this.add.circle(rx, ry, 1.5, 0x9944aa, 0.5);
+          spore.setDepth(9990);
+          this.tweens.add({
+            targets: spore,
+            y: ry - 22,
+            alpha: 0, duration: 2500,
+            onComplete: () => spore.destroy(),
+          });
+        }
+      } else if (this.isLichTower) {
+        // Void particles orbiting map center
+        this._ambientTimer = 400;
+        const mapCX = this.worldWidth / 2;
+        const mapCY = this.worldHeight / 2;
+        for (let vi = 0; vi < 3; vi++) {
+          const angle = Math.random() * Math.PI * 2;
+          const r = 30 + Math.random() * 50;
+          const vx = mapCX + Math.cos(angle) * r;
+          const vy = mapCY + Math.sin(angle) * r;
+          const voidP = this.add.circle(vx, vy, 2, 0x220033, 0.7);
+          voidP.setDepth(9990);
+          const newAngle = angle + 0.6;
+          this.tweens.add({
+            targets: voidP,
+            x: mapCX + Math.cos(newAngle) * r,
+            y: mapCY + Math.sin(newAngle) * r,
+            alpha: 0, duration: 800,
+            onComplete: () => voidP.destroy(),
+          });
+        }
       } else {
         this._ambientTimer = 1000; // No particles for other maps
       }
@@ -3953,9 +6293,10 @@ export class GameScene extends Phaser.Scene {
       // Player screen position relative to camera viewport
       const px = this.player.x - cam.scrollX;
       const py = this.player.y - cam.scrollY;
-      // Light radius scales with mana (60-100px)
+      // Light radius scales with mana (60-100px), extended by torch bundle
       const manaRatio = this.player.mana / this.player.maxMana;
-      const lightScale = 0.6 + manaRatio * 0.4; // 0.6 to 1.0
+      const torchMultiplier = this._torchBonus ? 1.5 : 1.0;
+      const lightScale = (0.6 + manaRatio * 0.4) * torchMultiplier; // 0.6 to 1.5
       this.darknessRT.erase('torch-light', px - 80 * lightScale, py - 80 * lightScale);
     }
 

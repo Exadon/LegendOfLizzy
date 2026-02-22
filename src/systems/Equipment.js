@@ -8,6 +8,7 @@ export const EQUIPMENT = {
   cloth_armor: { id: 'cloth_armor', name: 'Cloth Tunic', slot: 'armor', hp: 0, price: 0, color: '#88aa66', description: 'Basic cloth tunic' },
   leather_armor: { id: 'leather_armor', name: 'Leather Armor', slot: 'armor', hp: 2, price: 60, color: '#996633', description: '+2 Max HP' },
   iron_armor: { id: 'iron_armor', name: 'Iron Armor', slot: 'armor', hp: 5, price: 180, color: '#aaaacc', description: '+5 Max HP' },
+  warm_cloak: { id: 'warm_cloak', name: 'Warm Cloak', slot: 'armor', hp: 2, price: 0, color: '#ccddee', description: '+2 Max HP (craftable)' },
 };
 
 export class EquipmentManager {
