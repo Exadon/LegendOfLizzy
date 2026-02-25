@@ -164,6 +164,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     this.wanderDirection = { x: 0, y: 0 };
     this.isHurt = false;
     this.hurtTimer = 0;
+    this._dying = false;
 
     this.play('slime-idle');
   }
@@ -208,6 +209,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount = 1, sourceX, sourceY) {
+    if (this._dying) return;
     this.health -= amount;
     this.isHurt = true;
     this.hurtTimer = 250;
@@ -232,6 +234,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     }
 
     if (this.health <= 0) {
+      this._dying = true;
       this.destroy();
     }
   }

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
-    super(scene, x, y, 'goblin', 0);
+    super(scene, x, y, 'goblin-thief', 0);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -45,6 +45,7 @@ export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
         this.setTint(0x88bb44);
       }
       this.setVelocity(0, 0);
+      this.play('goblin-idle-down', true);
       this._updateBars();
       return;
     }
@@ -54,7 +55,10 @@ export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
     // Flee if player is too close
     if (dist < 40) {
       const angle = Phaser.Math.Angle.Between(player.x, player.y, this.x, this.y);
-      this.setVelocity(Math.cos(angle) * this.speed * 1.5, Math.sin(angle) * this.speed * 1.5);
+      const vx = Math.cos(angle) * this.speed * 1.5;
+      const vy = Math.sin(angle) * this.speed * 1.5;
+      this.setVelocity(vx, vy);
+      this._playMoveAnim(vx, vy);
       this._state = 'idle';
       this._stateTimer = 0;
       this._updateBars();
@@ -70,15 +74,20 @@ export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
           this._state = 'aim';
           this._stateTimer = 1500;
           this.setVelocity(0, 0);
+          this.play('goblin-idle-down', true);
         } else {
           // Wander slowly toward player
           const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
-          this.setVelocity(Math.cos(angle) * this.speed * 0.5, Math.sin(angle) * this.speed * 0.5);
+          const vx = Math.cos(angle) * this.speed * 0.5;
+          const vy = Math.sin(angle) * this.speed * 0.5;
+          this.setVelocity(vx, vy);
+          this._playMoveAnim(vx, vy);
         }
         break;
 
       case 'aim':
         this.setVelocity(0, 0);
+        this.play('goblin-idle-down', true);
         if (this._stateTimer <= 0) {
           this._fireArrow(player);
           this._state = 'cooldown';
@@ -88,6 +97,7 @@ export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
 
       case 'cooldown':
         this.setVelocity(0, 0);
+        this.play('goblin-idle-down', true);
         if (this._stateTimer <= 0) {
           this._state = 'idle';
         }
@@ -96,6 +106,19 @@ export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
 
     this._updateBars();
     this.setDepth(this.y);
+  }
+
+  _playMoveAnim(vx, vy) {
+    if (Math.abs(vx) > Math.abs(vy)) {
+      this.play('goblin-walk-right', true);
+      this.setFlipX(vx < 0);
+    } else if (vy < 0) {
+      this.play('goblin-walk-up', true);
+      this.setFlipX(false);
+    } else {
+      this.play('goblin-walk-down', true);
+      this.setFlipX(false);
+    }
   }
 
   _fireArrow(player) {
@@ -172,6 +195,7 @@ export class GoblinArcher extends Phaser.Physics.Arcade.Sprite {
 
   _die() {
     this._dying = true;
+    if (this._timers) { this._timers.forEach(t => { try { t.remove(); } catch (_) {} }); this._timers = []; }
     this.setVelocity(0, 0);
     this.body.enable = false;
 

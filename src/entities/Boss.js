@@ -304,6 +304,12 @@ export class SkeletonKing extends Phaser.Physics.Arcade.Sprite {
     scene.events.emit('boss-defeated');
     if (scene.checkVictory) scene.checkVictory();
 
+    // Crystal drop
+    const _bx = this.x, _by = this.y;
+    scene.time.delayedCall(600, () => {
+      if (scene._dropCrystal) scene._dropCrystal(_bx, _by + 20, 0xff4444, 'crystal_red');
+    });
+
     // Cleanup
     this.healthBarBg.destroy();
     this.healthBarFill.destroy();

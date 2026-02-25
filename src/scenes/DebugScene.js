@@ -16,8 +16,8 @@ const CHARACTERS = [
   { key: 'desert-person-1', prefix: null, frameSize: 32 },
   { key: 'pharaoh', prefix: 'pharaoh', frameSize: 32 },
   { key: 'swordman', prefix: null, frameSize: 48 },
-  { key: 'goblin-thief', prefix: null, frameSize: 32 },
-  { key: 'orc-grunt', prefix: null, frameSize: 32 },
+  { key: 'goblin-thief', prefix: 'goblin', frameSize: 32 },
+  { key: 'orc-grunt', prefix: 'orc', frameSize: 32 },
   { key: 'butterfly', prefix: 'butterfly', frameSize: 8 },
 ];
 

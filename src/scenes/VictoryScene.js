@@ -10,7 +10,11 @@ export class VictoryScene extends Phaser.Scene {
     this.stats = data || {};
     this.trueEnding = data && data.trueEnding ? true : false;
     this.lichEnding = data && data.lichEnding ? true : false;
+    this.direEnding = data && data.direEnding ? true : false;
     this.achievements = data && data.achievements ? data.achievements : {};
+    this.petType = data && data.petType ? data.petType : null;
+    this.petAffection = data && data.petAffection ? data.petAffection : 0;
+    this.petName = data && data.petName ? data.petName : null;
   }
 
   create() {
@@ -18,7 +22,8 @@ export class VictoryScene extends Phaser.Scene {
     const h = this.cameras.main.height;
     const sfx = this.registry.get('sfx');
 
-    this.cameras.main.setBackgroundColor(this.lichEnding ? '#0a0010' : '#0a0a1a');
+    const bgColor = this.direEnding ? '#05000a' : (this.lichEnding ? '#0a0010' : '#0a0a1a');
+    this.cameras.main.setBackgroundColor(bgColor);
     this.cameras.main.fadeIn(1000, 0, 0, 0);
 
     // Play victory music
@@ -41,13 +46,15 @@ export class VictoryScene extends Phaser.Scene {
       });
     }
 
-    // Victory particles (gold sparkles falling)
+    // Victory particles (gold sparkles falling, or rainbow for dire ending)
+    const DIRE_COLORS = [0xff4466, 0xff8844, 0xffdd00, 0x44ff88, 0x44aaff, 0xcc44ff, 0xff88cc];
+    const GOLD_COLORS = [0xffdd00, 0xffaa00, 0xffffff, 0xff8844];
     this.time.addEvent({
-      delay: 200,
+      delay: this.direEnding ? 120 : 200,
       callback: () => {
         const px = Math.random() * w;
-        const colors = [0xffdd00, 0xffaa00, 0xffffff, 0xff8844];
-        const p = this.add.circle(px, -4, 1.5, colors[Math.floor(Math.random() * 4)], 0.8);
+        const colors = this.direEnding ? DIRE_COLORS : GOLD_COLORS;
+        const p = this.add.circle(px, -4, 1.5, colors[Math.floor(Math.random() * colors.length)], 0.9);
         p.setDepth(1);
         this.tweens.add({
           targets: p,
@@ -65,8 +72,8 @@ export class VictoryScene extends Phaser.Scene {
 
     // "VICTORY" text
     this.time.delayedCall(500, () => {
-      const victoryLabel = this.lichEnding ? 'LICH KING DEFEATED!' : 'VICTORY';
-      const victoryColor = this.lichEnding ? '#dd88ff' : '#ffdd00';
+      const victoryLabel = this.direEnding ? 'LORD DIRE VANQUISHED!' : (this.lichEnding ? 'LICH KING DEFEATED!' : 'VICTORY');
+      const victoryColor = this.direEnding ? '#ff88cc' : (this.lichEnding ? '#dd88ff' : '#ffdd00');
       const victory = this.add.text(w / 2, 20, victoryLabel, {
         fontSize: '18px',
         fontFamily: 'Arial, sans-serif',
@@ -93,19 +100,58 @@ export class VictoryScene extends Phaser.Scene {
       });
     });
 
-    // Lizzy sprite
+    // Lizzy sprite + pet companion
     this.time.delayedCall(1200, () => {
       const lizzy = this.add.sprite(w / 2, 64, 'lizzy');
       lizzy.play('lizzy-idle-down');
       lizzy.setScale(1.5).setAlpha(0);
       this.tweens.add({ targets: lizzy, alpha: 1, duration: 600 });
+
+      // Draw pet companion beside Lizzy
+      if (this.petType) {
+        const px = w / 2 + 28;
+        const py = 64;
+        if (this.petType === 'slime') {
+          const petBody = this.add.circle(px, py, 5, 0x88ddff).setAlpha(0);
+          this.tweens.add({ targets: petBody, alpha: 1, duration: 600 });
+          this.tweens.add({ targets: petBody, y: py - 3, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 600 });
+        } else if (this.petType === 'bat') {
+          const petBody = this.add.circle(px, py, 3, 0x332244).setAlpha(0);
+          this.tweens.add({ targets: petBody, alpha: 1, duration: 600 });
+          this.add.triangle(px - 4, py, 0, 0, -6, -4, -2, 4, 0x443355).setAlpha(0.8);
+          this.add.triangle(px + 4, py, 0, 0, 6, -4, 2, 4, 0x443355).setAlpha(0.8);
+        } else if (this.petType === 'mushroom') {
+          const cap = this.add.ellipse(px, py, 10, 7, 0xaa6633).setAlpha(0);
+          const stem = this.add.rectangle(px, py + 5, 4, 5, 0x886644).setAlpha(0);
+          this.tweens.add({ targets: [cap, stem], alpha: 1, duration: 600 });
+        } else if (this.petType === 'fairy') {
+          const petBody = this.add.circle(px, py, 4, 0xffdd44, 0.9).setAlpha(0);
+          this.tweens.add({ targets: petBody, alpha: 1, duration: 600 });
+          this.tweens.add({ targets: petBody, alpha: 0.5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 600 });
+        }
+      }
     });
 
     // Story text
     this.time.delayedCall(2000, () => {
       let storyLines;
       let storyColor;
-      if (this.lichEnding) {
+      if (this.direEnding) {
+        storyLines = [
+          'Lord Dire has fallen.',
+          'The darkness that fed on fear,',
+          'on shadow and despair —',
+          'is gone.',
+          '',
+          'Seven crystals of light,',
+          'one for each champion before you,',
+          'now shine free.',
+          '',
+          'Lizzy — Light Bringer.',
+          'Savior of the World.',
+        ];
+        storyColor = '#ff88cc';
+      } else if (this.lichEnding) {
         storyLines = [
           'Six dungeons cleared.',
           'Six bosses defeated:',
@@ -169,7 +215,26 @@ export class VictoryScene extends Phaser.Scene {
       this.tweens.add({ targets: statsText, alpha: 1, duration: 600 });
     });
 
-    // Achievements earned
+    // Pet companion line
+    this.time.delayedCall(4200, () => {
+      if (!this.petType) return;
+      const fallback = { slime: 'Slimey', bat: 'Batty', mushroom: 'Spore', fairy: 'Glimmer' };
+      const petName = this.petName || fallback[this.petType] || this.petType;
+      const aff = this.petAffection || 0;
+      const hearts = Math.min(5, Math.floor(aff / 10));
+      const emptyHearts = 5 - hearts;
+      const companionText = this.add.text(w / 2, 172, `Companion: ${petName}  ${'♥'.repeat(hearts)}${'♡'.repeat(emptyHearts)}`, {
+        fontSize: '11px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#88ddff',
+        stroke: '#001122',
+        strokeThickness: 2,
+        align: 'center',
+      }).setOrigin(0.5, 0).setAlpha(0);
+      this.tweens.add({ targets: companionText, alpha: 1, duration: 600 });
+    });
+
+    // Achievements earned — shown in two columns to avoid overflow
     this.time.delayedCall(4800, () => {
       const earned = Object.keys(this.achievements || {});
       if (earned.length === 0) return;
@@ -178,43 +243,47 @@ export class VictoryScene extends Phaser.Scene {
         lich_vanquished: 'Lich Vanquished', crafter: 'Crafter',
         angler: 'Angler', hoarder: 'Hoarder',
         explorer: 'Explorer', true_hero: 'True Hero',
+        storyteller: 'Storyteller', butterfly_collector: 'Nature Lover',
+        beloved_friend: 'Beloved Friend', stargazer: 'Stargazer', treasure_hunter: 'Treasure Hunter',
+        rainbow_chaser: 'Rainbow Chaser', lord_dire_vanquished: 'Light Bringer',
+        loremaster: 'Loremaster', master_angler: 'Master Angler',
+        all_seasons: 'All Seasons', decorate_home: 'Home Decorator',
+        grand_festival: 'Town Hero', firefly_friend: 'Firefly Friend',
       };
-      const lines = ['— Achievements —', ...earned.map(id => `✓ ${ACHIEVEMENT_LABELS[id] || id}`)];
-      const achText = this.add.text(w / 2, 175, lines.join('\n'), {
-        fontSize: '10px',
-        fontFamily: 'Arial, sans-serif',
-        color: '#ffdd00',
-        align: 'center',
-        lineSpacing: 2,
-      }).setOrigin(0.5, 0).setAlpha(0);
-      this.tweens.add({ targets: achText, alpha: 1, duration: 600 });
-    });
+      // Split into two columns if >4 achievements
+      const labels = earned.map(id => `✓ ${ACHIEVEMENT_LABELS[id] || id}`);
+      const half = Math.ceil(labels.length / 2);
+      const col1 = labels.slice(0, half);
+      const col2 = labels.slice(half);
+      const headerY = this.petType ? 188 : 178;
 
-    // Credits
-    this.time.delayedCall(5500, () => {
-      const credits = this.add.text(w / 2, 186, [
-        '- CREDITS -',
-        '',
-        'Art: Kenmi Art',
-        'Built with Phaser 3',
-        'Made with love',
-      ].join('\n'), {
-        fontSize: '12px',
-        fontFamily: 'Arial, sans-serif',
-        color: '#888899',
-        align: 'center',
-        lineSpacing: 3,
-      }).setOrigin(0.5, 0).setAlpha(0);
-      this.tweens.add({ targets: credits, alpha: 1, duration: 600 });
+      this.add.text(w / 2, headerY - 10, '— Achievements —', {
+        fontSize: '9px', fontFamily: 'Arial, sans-serif',
+        color: '#ffdd88', stroke: '#000000', strokeThickness: 2, align: 'center',
+      }).setOrigin(0.5, 0).setAlpha(0.9);
+
+      this.add.text(w / 4, headerY, col1.join('\n'), {
+        fontSize: '9px', fontFamily: 'Arial, sans-serif',
+        color: '#ffdd00', align: 'left', lineSpacing: 1,
+      }).setOrigin(0.5, 0).setAlpha(0.9);
+
+      if (col2.length > 0) {
+        this.add.text(w * 3 / 4, headerY, col2.join('\n'), {
+          fontSize: '9px', fontFamily: 'Arial, sans-serif',
+          color: '#ffdd00', align: 'left', lineSpacing: 1,
+        }).setOrigin(0.5, 0).setAlpha(0.9);
+      }
     });
 
     // Return to title + New Game+ prompt
-    this.time.delayedCall(7000, () => {
-      const prompt = this.add.text(w / 2, h - 20, '[ENTER] Main Menu    [N] New Game+', {
-        fontSize: '11px',
+    this.time.delayedCall(6500, () => {
+      const prompt = this.add.text(w / 2, h - 10, '[ENTER] Main Menu  •  [N] New Game+', {
+        fontSize: '10px',
         fontFamily: 'Arial, sans-serif',
         color: '#ffffff',
-      }).setOrigin(0.5).setAlpha(0);
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5, 1).setAlpha(0);
       this.tweens.add({ targets: prompt, alpha: 1, duration: 400 });
       this.tweens.add({
         targets: prompt,

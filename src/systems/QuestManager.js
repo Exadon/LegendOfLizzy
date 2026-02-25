@@ -65,6 +65,28 @@ export class QuestManager {
         }
         return quest;
       }
+      // decor_buy: furniture purchases from Clara
+      if (eventType === 'decor_buy' && quest.objective.trackEvent === 'decor_buy') {
+        quest.progress = Math.min(quest.progress + 1, quest.objective.count);
+        if (quest.progress >= quest.objective.count) {
+          quest.state = QuestState.READY_TO_TURN_IN;
+        }
+        return quest;
+      }
+      // festival_dance: dancing on the festival stage
+      if (eventType === 'festival_dance' && quest.objective.type === 'festival_dance') {
+        quest.progress = 1;
+        quest.state = QuestState.READY_TO_TURN_IN;
+        return quest;
+      }
+      // edna_cook: cooking meals at the farm cauldron for Edna's feast quest
+      if (eventType === 'edna_cook' && quest.objective.type === 'edna_cook') {
+        quest.progress = Math.min(quest.progress + 1, quest.objective.count);
+        if (quest.progress >= quest.objective.count) {
+          quest.state = QuestState.READY_TO_TURN_IN;
+        }
+        return quest;
+      }
     }
     return null;
   }
@@ -109,7 +131,7 @@ export const QUESTS = {
     giver: 'farmer_bob',
     dialogue: {
       available: [
-        'Help! Skeletons have been\nterrorizing the town!',
+        'Help! Skeletons are coming\nfrom the old cave up north!',
         'Can you defeat 5 of them\nfor me? I\'ll reward you!',
       ],
       active: [
@@ -230,8 +252,8 @@ export const QUESTS = {
     giver: 'lumberjack_jack',
     dialogue: {
       available: [
-        'The forest is crawling\nwith slimes!',
-        'Defeat 4 of them so I\ncan chop in peace!',
+        'Those slimes are lurking\nat the forest edge!',
+        'Just past the south gate.\nDefeat 4 of them!',
       ],
       active: [
         'Still squishy things\neverywhere! Keep at it!',
@@ -318,8 +340,8 @@ export const QUESTS = {
     giver: 'ranger_reed',
     dialogue: {
       available: [
-        'The forest is crawling with\ngoblins lately...',
-        'Kill 3 goblins so I can\nassess the threat!',
+        'Goblins have overrun\nthe forest!',
+        'Head through the south gate\nand follow the path west.\nKill 3 of them!',
       ],
       active: [
         'Keep hunting those goblins!\nI need to know how many there are.',
@@ -863,6 +885,286 @@ export const QUESTS = {
     },
     reward: { gold: 60, xp: 80 },
     objective: { type: 'collect_material', materialId: 'crystal_shard', count: 2, description: 'Collect 2 Crystal Shards' },
+  },
+
+  // ---- Phase 18: New World Quests ----
+
+  beach_threat: {
+    id: 'beach_threat',
+    name: 'Coastal Menace',
+    giver: 'harbor_captain',
+    dialogue: {
+      available: [
+        'The Coral Beach is overrun\nby strange sea creatures!',
+        'Clear out 5 of them and\nI\'ll make it worth your while.',
+      ],
+      active: ['Head to the Coral Beach\nand defeat 5 coral enemies!'],
+      ready: ['You cleared them out!\nThe beach is safe again.', 'Well done, adventurer!'],
+      completed: ['The coast is clear\nthanks to you!'],
+    },
+    reward: { gold: 50, xp: 80 },
+    objective: { type: 'kill', target: 'coral_enemy', count: 5, description: 'Defeat 5 Coral Enemies' },
+  },
+
+  clear_beach_dungeon: {
+    id: 'clear_beach_dungeon',
+    name: 'Depths of the Coral Cavern',
+    giver: 'harbor_captain',
+    dialogue: {
+      available: [
+        'Something big is lurking\nin the beach cave.',
+        'A coral beast — ancient\nand furious. Will you face it?',
+      ],
+      active: ['Find and defeat the\nCoral Beast in the beach cave!'],
+      ready: ['The Coral Beast is slain!\nThe seas are safe once more.'],
+      completed: ['The fishermen can work\nin peace again. Thank you!'],
+    },
+    reward: { gold: 120, xp: 200 },
+    objective: { type: 'kill', target: 'coral_beast', count: 1, description: 'Defeat the Coral Beast' },
+  },
+
+  shadows_at_bay: {
+    id: 'shadows_at_bay',
+    name: 'Shadows at Bay',
+    giver: 'gravekeeper_mort',
+    dialogue: {
+      available: [
+        'The Shadow Keep to the west\nspills shadow-knights into\nthe countryside!',
+        'Their dark commander must\nbe stopped. Will you go?',
+      ],
+      active: ['Venture into the Shadow Keep\nand defeat its commander!'],
+      ready: ['The shadow forces are\nleaderless now. Peace returns.'],
+      completed: ['You\'ve done us all\na great service.'],
+    },
+    reward: { gold: 150, xp: 250 },
+    objective: { type: 'kill', target: 'death_knight', count: 1, description: 'Defeat the Shadow Commander' },
+  },
+
+  arcane_mystery: {
+    id: 'arcane_mystery',
+    name: 'Lost Arcane Tome',
+    giver: 'sand_scholar',
+    dialogue: {
+      available: [
+        'A rare arcane tome was\nlost deep in the desert crypts.',
+        'Retrieve it and I\'ll reward\nyou handsomely!',
+      ],
+      active: ['Find the arcane tome\nin the Arcane Crypt!'],
+      ready: ['You found it! This tome\nholds ancient power.'],
+      completed: ['Remarkable discoveries\nwithin these pages...'],
+    },
+    reward: { gold: 100, xp: 150 },
+    objective: { type: 'fetch', fetchItemId: 'arcane_tome', count: 1, description: 'Retrieve the Arcane Tome' },
+  },
+
+  wizard_menace: {
+    id: 'wizard_menace',
+    name: 'The Arcane Wizard',
+    giver: 'hermit_rolf',
+    dialogue: {
+      available: [
+        'A powerful wizard has taken\nover the isle to the west!',
+        'His tower corrupts the land.\nSomeone must stop him.',
+      ],
+      active: ['Scale the Wizard Tower\nand defeat the Arcane Wizard!'],
+      ready: ['The wizard\'s power is broken!\nWell done, young hero.'],
+      completed: ['Balance is restored.\nYou have my deepest thanks.'],
+    },
+    reward: { gold: 200, xp: 300 },
+    objective: { type: 'kill', target: 'wizard_boss', count: 1, description: 'Defeat the Arcane Wizard' },
+  },
+
+  island_explorer: {
+    id: 'island_explorer',
+    name: 'Island Explorer',
+    giver: 'ferry_captain',
+    dialogue: {
+      available: [
+        'The two islands beyond the\nharbor are worth exploring!',
+        'Visit both Coral Beach and\nWizard Isle. I\'ll pay you for the report!',
+      ],
+      active: ['Visit Coral Beach and\nWizard Isle by ferry!'],
+      ready: ['You\'ve been to both islands!\nTell me what you found.'],
+      completed: ['Fascinating tales! The islands\nhave so much to offer.'],
+    },
+    reward: { gold: 80, xp: 100 },
+    objective: { type: 'visit', visitMap: 'beach', count: 1, description: 'Visit Coral Beach & Wizard Isle' },
+  },
+
+  // ---- Phase 19: New Town Quests ----
+
+  gather_herbs: {
+    id: 'gather_herbs',
+    name: 'Gather Forest Herbs',
+    giver: 'forest_herbalist',
+    dialogue: {
+      available: [
+        'The deep forest holds rare herbs\nI need for my remedies.',
+        'Could you venture in and\ncollect them for me?',
+      ],
+      active: ['Head into the deep forest\nand gather the herbs!'],
+      ready: ['You\'ve been to the forest!\nThank you for your effort.'],
+      completed: ['These herbs will help\nmany in the town.'],
+    },
+    reward: { gold: 60, xp: 80 },
+    objective: { type: 'visit', visitMap: 'forest', count: 1, description: 'Gather herbs in the deep forest' },
+  },
+
+  desert_pilgrimage: {
+    id: 'desert_pilgrimage',
+    name: 'Desert Pilgrimage',
+    giver: 'desert_sage',
+    dialogue: {
+      available: [
+        'The Desert Valley holds\nancient spiritual power.',
+        'A true seeker must make\nthe journey. Will you go?',
+      ],
+      active: ['Journey to the Desert Valley\nand take in its ancient power.'],
+      ready: ['You\'ve walked the valley!\nThe sands have spoken to you.'],
+      completed: ['The desert valley guards\nits secrets well.'],
+    },
+    reward: { gold: 70, xp: 90 },
+    objective: { type: 'visit', visitMap: 'desert_valley', count: 1, description: 'Visit the Desert Valley' },
+  },
+
+  // ---- Phase 20: Farm Mechanics ----
+
+  farm_wool: {
+    id: 'farm_wool',
+    name: 'Woolly Business',
+    giver: 'farm_manager',
+    dialogue: {
+      available: [
+        'Hello there! I\'m Rosa, the\nfarm manager.',
+        'I need 3 bundles of wool.\nCan you gather some from the sheep?',
+      ],
+      active: [
+        'Keep at it! I need 3\nbundles of wool total.',
+      ],
+      ready: [
+        'You got the wool!\nThis will keep us warm.',
+        'Here\'s your reward,\nthank you so much!',
+      ],
+      completed: [
+        'The wool has been a\nbig help around here!',
+      ],
+    },
+    reward: { gold: 80, xp: 100 },
+    objective: {
+      type: 'collect_material',
+      materialId: 'wool',
+      count: 3,
+      description: 'Collect 3 Wool',
+    },
+  },
+
+  farm_dairy: {
+    id: 'farm_dairy',
+    name: 'Fresh From the Farm',
+    giver: 'farm_manager',
+    dialogue: {
+      available: [
+        'The town needs fresh milk!\nCould you collect 3 buckets?',
+        'The cow is well-fed and\nready to give milk.',
+      ],
+      active: [
+        'Keep collecting! I need 3\nbuckets of fresh milk.',
+      ],
+      ready: [
+        'Three buckets of milk!\nPerfect, the town will love it.',
+        'Here\'s your reward\nfor the hard work!',
+      ],
+      completed: [
+        'Fresh milk every day\nkeeps everyone happy!',
+      ],
+    },
+    reward: { gold: 70, xp: 90 },
+    objective: {
+      type: 'collect_material',
+      materialId: 'milk',
+      count: 3,
+      description: 'Collect 3 Milk',
+    },
+  },
+
+  // ---- Phase 29: Cozy Corners ----
+
+  decorate_home: {
+    id: 'decorate_home',
+    name: 'Home Sweet Home',
+    giver: 'clara_crafter',
+    dialogue: {
+      available: [
+        'Oh! You want to make your\nhome cozier? I can help!',
+        'Buy 3 pieces of furniture\nfrom my shop to start.',
+      ],
+      active: [
+        'Keep decorating! A cozy home\nis a happy home.',
+      ],
+      ready: [
+        'Your home looks wonderful!\nYou have a real knack for this.',
+        'Here\'s a little reward\nfor the lovely decorating!',
+      ],
+      completed: [
+        'Your home is the cosiest\nplace in all the land!',
+      ],
+    },
+    reward: { gold: 50, xp: 80 },
+    objective: {
+      type: 'collect',
+      trackEvent: 'decor_buy',
+      count: 3,
+      description: 'Buy 3 furniture items',
+    },
+  },
+
+  // ---- Phase 30: Grand Festival ----
+
+  festival_dance: {
+    id: 'festival_dance',
+    name: 'Dance at the Festival!',
+    giver: 'bard_pip',
+    dialogue: {
+      available: [
+        'Welcome to the Grand Festival!\nWill you dance on our stage?',
+      ],
+      active: [
+        'Press Z near the dance stage\nto join the celebration!',
+      ],
+      ready: [
+        "You danced beautifully!\nThe whole town is cheering!",
+      ],
+      completed: [
+        "Thanks for dancing with us!\nYou're the star of the festival!",
+      ],
+    },
+    reward: { gold: 60, xp: 80 },
+    objective: { type: 'festival_dance', count: 1, description: 'Dance on the festival stage' },
+  },
+
+  // ---- Phase 31: Wishes & Wonders ----
+
+  edna_feast: {
+    id: 'edna_feast',
+    name: "Edna's Grand Feast",
+    giver: 'cook_edna',
+    dialogue: {
+      available: [
+        "Now that the festival is over,\nI want to cook something special!",
+        "Head to the farm cauldron\nand cook 2 meals for me!",
+      ],
+      active: [
+        "Cook 2 meals at the farm\ncauldron for the feast!",
+      ],
+      ready: [
+        "You cooked 2 whole meals!\nThe feast is ready! Wonderful!",
+      ],
+      completed: [
+        "That feast was amazing!\nThe whole town loved it! ♥",
+      ],
+    },
+    reward: { gold: 80, xp: 100 },
+    objective: { type: 'edna_cook', count: 2, description: 'Cook 2 meals at the farm cauldron' },
   },
 
   // Original arena quest

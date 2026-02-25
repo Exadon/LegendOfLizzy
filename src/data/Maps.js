@@ -1,3 +1,76 @@
+import { MapGenerator } from '../utils/MapGenerator.js';
+
+// Pre-generate data using MapGenerator
+const _worldOutdoor = MapGenerator.outdoor(80, 56, 7331, 'overworld');
+const _harborTownCollision = MapGenerator.town(35, 25, 4004).collision;
+const _forestTownCollision = MapGenerator.town(28, 22, 5005).collision;
+const _desertTownCollision = MapGenerator.town(28, 22, 6006).collision;
+const _dungBeach = MapGenerator.dungeon(22, 18, 7001);
+const _dungShadow = MapGenerator.dungeon(22, 18, 7002);
+const _dungArcane = MapGenerator.dungeon(22, 18, 7003);
+const _dungWizard1 = MapGenerator.dungeon(18, 16, 8001);
+const _dungWizard2 = MapGenerator.dungeon(18, 16, 8002);
+const _outdoorDesertValley = MapGenerator.outdoor(40, 32, 2002, 'desert_valley');
+const _outdoorWizardIsland = MapGenerator.outdoor(30, 24, 3003, 'wizard_island');
+
+export const WORLD_MAP = {
+  name: 'world',
+  width: 80,
+  height: 56,
+  tileSize: 16,
+  layers: { ground: null, collision: null },
+  biomes: [
+    { type: 'forest', x1: 0,  y1: 12, x2: 18, y2: 44 },
+    { type: 'desert', x1: 54, y1: 0,  x2: 80, y2: 28 },
+    { type: 'forest', x1: 0,  y1: 40, x2: 24, y2: 56 },
+  ],
+  objects: [
+    { type: 'oak-tree', x: 80,  y: 60  },
+    { type: 'oak-tree', x: 300, y: 80  },
+    { type: 'oak-tree', x: 150, y: 300 },
+    { type: 'oak-tree', x: 350, y: 200 },
+    { type: 'oak-tree', x: 100, y: 500 },
+    { type: 'oak-tree', x: 250, y: 450 },
+    { type: 'oak-tree', x: 180, y: 700 },
+    { type: 'oak-tree', x: 300, y: 650 },
+    { type: 'oak-tree', x: 550, y: 680 },
+    { type: 'oak-tree', x: 750, y: 620 },
+    { type: 'oak-tree', x: 900, y: 650 },
+    { type: 'oak-tree', x: 850, y: 120 },
+    { type: 'oak-tree', x: 920, y: 300 },
+    { type: 'oak-tree', x: 950, y: 500 },
+    { type: 'oak-tree', x: 800, y: 450 },
+    { type: 'oak-tree', x: 1100, y: 400 },
+    { type: 'oak-tree', x: 1150, y: 200 },
+    { type: 'oak-tree', x: 1050, y: 600 },
+    { type: 'house-wood', x: 600, y: 160 },
+    { type: 'house-wood', x: 720, y: 160 },
+    { type: 'house-wood', x: 680, y: 240 },
+    { type: 'house-wood', x: 760, y: 200 },
+  ],
+  doors: [
+    { x: 640, y: 96,  width: 48, height: 16, targetMap: 'harbor_town',   targetX: 280, targetY: 320 },
+    { x: 192, y: 384, width: 48, height: 16, targetMap: 'forest_town',   targetX: 200, targetY: 300 },
+    { x: 880, y: 224, width: 48, height: 16, targetMap: 'desert_town',   targetX: 200, targetY: 290 },
+    { x: 80,  y: 80,  width: 24, height: 14, targetMap: 'cave',          targetX: 160, targetY: 230 },
+    { x: 320, y: 416, width: 48, height: 24, targetMap: 'forest',        targetX: 320, targetY: 520 },
+    { x: 848, y: 80,  width: 24, height: 14, targetMap: 'desert_temple', targetX: 160, targetY: 200 },
+    { x: 512, y: 16,  width: 64, height: 16, targetMap: 'mountain',      targetX: 280, targetY: 400 },
+    { x: 640, y: 848, width: 48, height: 16, targetMap: 'harbor',        targetX: 400, targetY: 440 },
+    { x: 80,  y: 832, width: 48, height: 16, targetMap: 'ruins',         targetX: 320, targetY: 40  },
+    { x: 192, y: 832, width: 24, height: 14, targetMap: 'shadow_keep',   targetX: 160, targetY: 240 },
+    { x: 1040,y: 288, width: 24, height: 14, targetMap: 'arcane_crypt',  targetX: 160, targetY: 240 },
+    { x: 624, y: 448, width: 32, height: 16, targetMap: 'lich_tower',    targetX: 160, targetY: 300, requiresLichTower: true },
+    { x: 600, y: 160, width: 32, height: 16, targetMap: 'house_interior',targetX: 88,  targetY: 128 },
+    { x: 680, y: 240, width: 32, height: 16, targetMap: 'shop_interior', targetX: 88,  targetY: 128 },
+    { x: 720, y: 160, width: 32, height: 16, targetMap: 'inn_interior',  targetX: 88,  targetY: 128 },
+    { x: 480, y: 288, width: 48, height: 16, targetMap: 'farm',          targetX: 280, targetY: 344 },
+    { x: 256, y: 768, width: 32, height: 16, targetMap: 'shadow_citadel', targetX: 160, targetY: 260, requiresAllCrystals: true },
+  ],
+  playerSpawn: { x: 640, y: 192 },
+  teleportStone: { x: 480, y: 320, name: 'World Stone' },
+};
+
 export const OVERWORLD_MAP = {
   name: 'overworld',
   width: 65,
@@ -90,9 +163,13 @@ export const HOUSE_INTERIOR_MAP = {
     { type: 'table', x: 48, y: 72 },
     { type: 'bookshelf', x: 32, y: 32 },
     { type: 'barrel', x: 160, y: 112 },
+    { type: 'mirror', x: 144, y: 32 },       // Phase 15 — magical wardrobe mirror
+    { type: 'corkboard', x: 80, y: 112 },    // Phase 24 — butterfly display board
+    { type: 'telescope', x: 112, y: 32 },    // Phase 24 — stargazing telescope
+    { type: 'candle_stand', x: 64, y: 40 },  // Phase 27 — cozy home candles
   ],
   doors: [
-    { x: 48, y: 136, width: 96, height: 20, targetMap: 'overworld', targetX: 500, targetY: 100 },
+    { x: 48, y: 136, width: 96, height: 20, targetMap: 'world', targetX: 616, targetY: 180 },
   ],
   playerSpawn: { x: 88, y: 120 },
 };
@@ -130,7 +207,7 @@ export const SHOP_INTERIOR_MAP = {
     { id: 'shopkeeper', name: 'Shopkeeper', texture: 'miner-mike', x: 96, y: 36, role: 'shop' },
   ],
   doors: [
-    { x: 48, y: 136, width: 96, height: 20, targetMap: 'overworld', targetX: 300, targetY: 498 },
+    { x: 48, y: 136, width: 96, height: 20, targetMap: 'world', targetX: 696, targetY: 256 },
   ],
   playerSpawn: { x: 88, y: 120 },
 };
@@ -169,7 +246,7 @@ export const INN_INTERIOR_MAP = {
     { id: 'innkeeper', name: 'Innkeeper', texture: 'chef-chloe', x: 96, y: 36, role: 'inn' },
   ],
   doors: [
-    { x: 48, y: 136, width: 96, height: 20, targetMap: 'overworld', targetX: 720, targetY: 278 },
+    { x: 48, y: 136, width: 96, height: 20, targetMap: 'world', targetX: 736, targetY: 176 },
   ],
   playerSpawn: { x: 88, y: 120 },
 };
@@ -215,7 +292,7 @@ export const CAVE_MAP = {
     { id: 'cave_secret', x: 32, y: 32, loot: 'star_fragment' },
   ],
   doors: [
-    { x: 144, y: 244, width: 32, height: 10, targetMap: 'overworld', targetX: 60, targetY: 100 },
+    { x: 144, y: 244, width: 32, height: 10, targetMap: 'world', targetX: 96,  targetY: 96 },
     { x: 144, y: 20, width: 32, height: 10, targetMap: 'boss_room', targetX: 96, targetY: 200 },
   ],
   fetchItems: [
@@ -254,6 +331,7 @@ export const BOSS_ROOM_MAP = {
   hasBoss: true,
   bossType: 'skeleton_king',
   arenaProps: [{ x: 112, y: 112, type: 'challenge_crystal' }],
+  treasureMapSpawns: [{ id: 'map_alpha', x: 160, y: 40, label: 'Treasure Map!' }],
   doors: [
     { x: 96, y: 216, width: 32, height: 10, targetMap: 'cave', targetX: 160, targetY: 40 },
   ],
@@ -298,7 +376,7 @@ export const DESERT_TEMPLE_MAP = {
     { id: 'temple_secret', x: 288, y: 240, loot: 'star_fragment' },
   ],
   doors: [
-    { x: 144, y: 244, width: 32, height: 10, targetMap: 'overworld', targetX: 680, targetY: 180 },
+    { x: 144, y: 244, width: 32, height: 10, targetMap: 'world', targetX: 864, targetY: 96 },
     { x: 144, y: 20, width: 32, height: 10, targetMap: 'pharaoh_chamber', targetX: 128, targetY: 200 },
   ],
   playerSpawn: { x: 160, y: 200 },
@@ -405,11 +483,12 @@ export const FOREST_MAP = {
     { id: 'forest_chest_2', x: 420, y: 280, contents: { gold: 30 } },
   ],
   secretChests: [
-    { id: 'forest_secret', x: 48, y: 48, loot: 'star_fragment' },
+    { id: 'forest_secret',      x: 48,  y: 48,  loot: 'star_fragment'    },
+    { id: 'forest_bunny_chest', x: 580, y: 480, loot: 'wardrobe_bunny'   },  // Phase 15
   ],
   doors: [
     // South exit — walk off bottom edge to overworld
-    { x: 256, y: 548, width: 128, height: 24, targetMap: 'overworld', targetX: 100, targetY: 400 },
+    { x: 256, y: 548, width: 128, height: 24, targetMap: 'world', targetX: 336, targetY: 432 },
     // North exit — walk off top edge to boss room
     { x: 144, y: 4, width: 64, height: 20, targetMap: 'forest_boss', targetX: 96, targetY: 180 },
     // East exit — walk off right edge to town2 (Woodhaven)
@@ -607,7 +686,7 @@ export const MOUNTAIN_MAP = {
     { type: 'ice_skeleton', x: 100, y: 320 },
   ],
   doors: [
-    { x: 208, y: 436, width: 96, height: 20, targetMap: 'overworld', targetX: 540, targetY: 30 },
+    { x: 208, y: 436, width: 96, height: 20, targetMap: 'world', targetX: 528, targetY: 32 },
     { x: 280, y: 20, width: 64, height: 16, targetMap: 'mountain_cave', targetX: 176, targetY: 220 },
   ],
   playerSpawn: { x: 280, y: 400 },
@@ -708,7 +787,7 @@ export const HARBOR_MAP = {
     { type: 'pirate_ghost', x: 500, y: 250 },
   ],
   doors: [
-    { x: 288, y: 460, width: 64, height: 20, targetMap: 'overworld', targetX: 930, targetY: 690 },
+    { x: 288, y: 460, width: 64, height: 20, targetMap: 'world', targetX: 656, targetY: 864 },
     { x: 400, y: 30, width: 64, height: 16, targetMap: 'sea_cave', targetX: 160, targetY: 220 },
   ],
   playerSpawn: { x: 400, y: 440 },
@@ -752,6 +831,7 @@ export const SEA_CAVE_MAP = {
     { type: 'sea_wraith', x: 120, y: 180 },
   ],
   fetchItems: [{ id: 'lost_anchor', x: 280, y: 40, label: 'Anchor' }],
+  treasureMapSpawns: [{ id: 'map_beta', x: 60, y: 80, label: 'Treasure Map!' }],
   doors: [
     { x: 144, y: 272, width: 32, height: 10, targetMap: 'harbor', targetX: 400, targetY: 40 },
   ],
@@ -807,7 +887,7 @@ export const RUINS_MAP = {
     { type: 'undead_knight', x: 400, y: 280 },
   ],
   doors: [
-    { x: 240, y: 436, width: 80, height: 20, targetMap: 'overworld', targetX: 60, targetY: 690 },
+    { x: 240, y: 436, width: 80, height: 20, targetMap: 'world', targetX: 96,  targetY: 848 },
     { x: 320, y: 20, width: 64, height: 16, targetMap: 'ruins_dungeon', targetX: 176, targetY: 220 },
   ],
   playerSpawn: { x: 320, y: 40 },
@@ -851,6 +931,12 @@ export const RUINS_DUNGEON_MAP = {
     { type: 'undead_knight', x: 150, y: 180 },
   ],
   fetchItems: [{ id: 'sacred_relic', x: 176, y: 40, label: 'Relic' }],
+  treasureMapSpawns: [{ id: 'map_gamma', x: 60, y: 240, label: 'Treasure Map!' }],
+  // Phase 15 — wardrobe loot chests
+  secretChests: [
+    { id: 'ruins_wizard_chest', x: 300, y: 80,  loot: 'wardrobe_wizard' },
+    { id: 'ruins_cape_chest',   x: 60,  y: 240, loot: 'wardrobe_cape'   },
+  ],
   doors: [
     { x: 160, y: 272, width: 32, height: 10, targetMap: 'ruins', targetX: 320, targetY: 40 },
   ],
@@ -893,13 +979,368 @@ export const LICH_TOWER_MAP = {
     ],
   },
   doors: [
-    { x: 160, y: 308, width: 32, height: 10, targetMap: 'overworld', targetX: 536, targetY: 378 },
+    { x: 160, y: 308, width: 32, height: 10, targetMap: 'world', targetX: 640, targetY: 464 },
   ],
   playerSpawn: { x: 160, y: 300 },
 };
 
+
+// ---- Phase 18: New Biome Maps ----
+
+export const BEACH_MAP = {
+  name: 'beach',
+  width: 40, height: 30, tileSize: 16,
+  floorTile: 'harbor-floor', hasFishingSpot: true,
+  layers: { ground: null, collision: null },
+  objects: [
+    { type: 'oak-tree-small', x: 80,  y: 280 },
+    { type: 'oak-tree-small', x: 200, y: 320 },
+    { type: 'oak-tree-small', x: 380, y: 300 },
+    { type: 'oak-tree-small', x: 500, y: 260 },
+    { type: 'oak-tree-small', x: 300, y: 360 },
+    { type: 'oak-tree-small', x: 450, y: 340 },
+  ],
+  enemies: [
+    { type: 'coral_enemy', x: 120, y: 160 }, { type: 'coral_enemy', x: 260, y: 140 },
+    { type: 'coral_enemy', x: 400, y: 200 }, { type: 'coral_enemy', x: 200, y: 280 },
+    { type: 'coral_enemy', x: 350, y: 320 }, { type: 'coral_enemy', x: 460, y: 180 },
+    { type: 'bat',         x: 80,  y: 240 },
+  ],
+  doors: [
+    { x: 624, y: 460, width: 32, height: 16, targetMap: 'harbor', targetX: 400, targetY: 440 },
+    { x: 336, y: 20,  width: 32, height: 16, targetMap: 'beach_dungeon', targetX: 80, targetY: 200 },
+  ],
+  playerSpawn: { x: 320, y: 440 },
+};
+
+export const DESERT_VALLEY_MAP = {
+  name: 'desert_valley',
+  width: 40, height: 32, tileSize: 16,
+  floorTile: 'sand-floor',
+  layers: { ground: null, collision: _outdoorDesertValley.collision },
+  enemies: [
+    { type: 'scorpion', x: 80,  y: 80  }, { type: 'scorpion', x: 300, y: 120 },
+    { type: 'scorpion', x: 500, y: 80  }, { type: 'scorpion', x: 200, y: 300 },
+    { type: 'goblin_archer', x: 150, y: 180 }, { type: 'goblin_archer', x: 400, y: 200 }, { type: 'goblin_archer', x: 350, y: 350 },
+    { type: 'zombie',        x: 220, y: 180 },
+    { type: 'zombie',        x: 380, y: 260 },
+    { type: 'undead_knight', x: 300, y: 200 },
+    { type: 'undead_knight', x: 160, y: 300 },
+  ],
+  doors: [
+    { x: 304, y: 20,  width: 64, height: 16, targetMap: 'world',        targetX: 896,  targetY: 240 },
+    { x: 304, y: 492, width: 64, height: 16, targetMap: 'arcane_crypt', targetX: 160, targetY: 240 },
+  ],
+  playerSpawn: { x: 320, y: 40 },
+};
+
+export const WIZARD_ISLAND_MAP = {
+  name: 'wizard_island',
+  width: 30, height: 24, tileSize: 16,
+  floorTile: 'cave-floor', isDark: false,
+  layers: { ground: null, collision: _outdoorWizardIsland.collision },
+  enemies: [
+    { type: 'ghost', x: 80,  y: 120 }, { type: 'ghost', x: 280, y: 100 }, { type: 'skeleton', x: 200, y: 200 },
+    { type: 'ghost',         x: 280, y: 120 },
+    { type: 'ghost',         x: 340, y: 200 },
+    { type: 'ghost',         x: 180, y: 260 },
+    { type: 'undead_knight', x: 320, y: 160 },
+    { type: 'undead_knight', x: 200, y: 300 },
+    { type: 'skeleton',      x: 260, y: 240 },
+  ],
+  doors: [
+    { x: 32,  y: 192, width: 16, height: 48, targetMap: 'harbor',          targetX: 400, targetY: 440 },
+    { x: 240, y: 20,  width: 32, height: 16, targetMap: 'wizard_tower_1f', targetX: 144, targetY: 220 },
+  ],
+  playerSpawn: { x: 80, y: 192 },
+};
+
+// ---- Phase 18: New Town Maps ----
+
+export const HARBOR_TOWN_MAP = {
+  name: 'harbor_town',
+  width: 35, height: 25, tileSize: 16,
+  layers: { ground: null, collision: _harborTownCollision },
+  objects: [
+    { type: 'house-wood', x: 80,  y: 80  }, { type: 'house-wood', x: 420, y: 80  },
+    { type: 'house-wood', x: 80,  y: 240 }, { type: 'house-wood', x: 420, y: 240 },
+  ],
+  doors: [
+    { x: 272, y: 376, width: 80, height: 20, targetMap: 'world',             targetX: 656, targetY: 112 },
+    { x: 80,  y: 76,  width: 32, height: 16, targetMap: 'harbinn_interior',  targetX: 88,  targetY: 128 },
+    { x: 416, y: 76,  width: 32, height: 16, targetMap: 'harbshop_interior', targetX: 88,  targetY: 128 },
+  ],
+  playerSpawn: { x: 280, y: 320 },
+};
+
+export const FOREST_TOWN_MAP = {
+  name: 'forest_town',
+  width: 28, height: 22, tileSize: 16,
+  layers: { ground: null, collision: _forestTownCollision },
+  objects: [
+    { type: 'house-wood', x: 60,  y: 60  }, { type: 'house-wood', x: 360, y: 60  },
+    { type: 'house-wood', x: 60,  y: 200 }, { type: 'house-wood', x: 360, y: 200 },
+    { type: 'oak-tree', x: 220, y: 30 }, { type: 'oak-tree', x: 20, y: 140 },
+  ],
+  doors: [
+    { x: 192, y: 320, width: 80, height: 20, targetMap: 'world',       targetX: 208, targetY: 400 },
+    { x: 60,  y: 56,  width: 32, height: 16, targetMap: 'forest_inn',  targetX: 88,  targetY: 128 },
+    { x: 356, y: 56,  width: 32, height: 16, targetMap: 'forest_shop', targetX: 88,  targetY: 128 },
+  ],
+  playerSpawn: { x: 200, y: 300 },
+};
+
+export const DESERT_TOWN_MAP = {
+  name: 'desert_town',
+  width: 28, height: 22, tileSize: 16,
+  floorTile: 'sand-floor',
+  layers: { ground: null, collision: _desertTownCollision },
+  objects: [
+    { type: 'house-wood', x: 60,  y: 60  }, { type: 'house-wood', x: 360, y: 60  },
+    { type: 'house-wood', x: 60,  y: 200 }, { type: 'house-wood', x: 360, y: 200 },
+  ],
+  doors: [
+    { x: 192, y: 320, width: 80, height: 20, targetMap: 'world',        targetX: 896, targetY: 240 },
+    { x: 60,  y: 56,  width: 32, height: 16, targetMap: 'desert_inn',   targetX: 88,  targetY: 128 },
+    { x: 356, y: 56,  width: 32, height: 16, targetMap: 'desert_shop',  targetX: 88,  targetY: 128 },
+  ],
+  playerSpawn: { x: 200, y: 290 },
+};
+
+// ---- Phase 18: New Town Interiors ----
+
+const _interiorCollision = [
+  [1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,1,1,0,0,0,0,0,0,1,1,1],
+];
+
+export const HARBINN_INTERIOR_MAP = {
+  name: 'harbinn_interior', width: 12, height: 10, tileSize: 16, floorTile: 'wood-floor',
+  layers: { ground: null, collision: _interiorCollision },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 }, { type: 'bed', x: 40, y: 40 }, { type: 'bed', x: 160, y: 40 },
+    { type: 'table', x: 48, y: 96 }, { type: 'barrel', x: 160, y: 112 },
+  ],
+  interiorNPCs: [ { id: 'harbor_innkeeper', name: 'Innkeeper', texture: 'chef-chloe', x: 96, y: 36, role: 'inn' } ],
+  doors: [ { x: 48, y: 136, width: 96, height: 20, targetMap: 'harbor_town', targetX: 96, targetY: 96 } ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+export const HARBSHOP_INTERIOR_MAP = {
+  name: 'harbshop_interior', width: 12, height: 10, tileSize: 16, floorTile: 'wood-floor',
+  layers: { ground: null, collision: _interiorCollision },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 }, { type: 'shelf', x: 32, y: 32 }, { type: 'shelf', x: 160, y: 32 },
+    { type: 'barrel', x: 32, y: 80 }, { type: 'barrel', x: 160, y: 80 },
+  ],
+  interiorNPCs: [ { id: 'harbor_shopkeeper', name: 'Shopkeeper', texture: 'miner-mike', x: 96, y: 36, role: 'shop' } ],
+  doors: [ { x: 48, y: 136, width: 96, height: 20, targetMap: 'harbor_town', targetX: 432, targetY: 96 } ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+export const FOREST_INN_MAP = {
+  name: 'forest_inn', width: 12, height: 10, tileSize: 16, floorTile: 'wood-floor',
+  layers: { ground: null, collision: _interiorCollision },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 }, { type: 'bed', x: 40, y: 40 }, { type: 'bed', x: 160, y: 40 },
+    { type: 'table', x: 96, y: 96 }, { type: 'barrel', x: 160, y: 112 },
+  ],
+  interiorNPCs: [ { id: 'forest_innkeeper', name: 'Innkeeper', texture: 'chef-chloe', x: 96, y: 36, role: 'inn' } ],
+  doors: [ { x: 48, y: 136, width: 96, height: 20, targetMap: 'forest_town', targetX: 76, targetY: 76 } ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+export const FOREST_SHOP_MAP = {
+  name: 'forest_shop', width: 12, height: 10, tileSize: 16, floorTile: 'wood-floor',
+  layers: { ground: null, collision: _interiorCollision },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 }, { type: 'shelf', x: 32, y: 32 }, { type: 'shelf', x: 160, y: 32 },
+    { type: 'table', x: 40, y: 112 }, { type: 'barrel', x: 32, y: 80 },
+  ],
+  interiorNPCs: [ { id: 'forest_shopkeeper', name: 'Shopkeeper', texture: 'miner-mike', x: 96, y: 36, role: 'shop' } ],
+  doors: [ { x: 48, y: 136, width: 96, height: 20, targetMap: 'forest_town', targetX: 372, targetY: 76 } ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+export const DESERT_INN_MAP = {
+  name: 'desert_inn', width: 12, height: 10, tileSize: 16, floorTile: 'wood-floor',
+  layers: { ground: null, collision: _interiorCollision },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 }, { type: 'bed', x: 40, y: 40 }, { type: 'bed', x: 160, y: 40 }, { type: 'barrel', x: 160, y: 112 },
+  ],
+  interiorNPCs: [ { id: 'desert_innkeeper', name: 'Innkeeper', texture: 'chef-chloe', x: 96, y: 36, role: 'inn' } ],
+  doors: [ { x: 48, y: 136, width: 96, height: 20, targetMap: 'desert_town', targetX: 76, targetY: 76 } ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+export const DESERT_SHOP_MAP = {
+  name: 'desert_shop', width: 12, height: 10, tileSize: 16, floorTile: 'wood-floor',
+  layers: { ground: null, collision: _interiorCollision },
+  furniture: [
+    { type: 'counter', x: 96, y: 48 }, { type: 'shelf', x: 32, y: 32 }, { type: 'shelf', x: 160, y: 32 }, { type: 'barrel', x: 32, y: 80 },
+  ],
+  interiorNPCs: [ { id: 'sand_scholar', name: 'Sand Scholar', texture: 'miner-mike', x: 96, y: 36, role: 'shop' } ],
+  doors: [ { x: 48, y: 136, width: 96, height: 20, targetMap: 'desert_town', targetX: 372, targetY: 76 } ],
+  playerSpawn: { x: 88, y: 120 },
+};
+
+// ---- Phase 18: New Dungeons ----
+
+export const BEACH_DUNGEON_MAP = {
+  name: 'beach_dungeon', width: 22, height: 18, tileSize: 16,
+  floorTile: 'cave-floor', isDark: true, hasBoss: true, bossType: 'coral_beast',
+  layers: { ground: null, collision: _dungBeach.collision },
+  enemies: [
+    { type: 'bat', x: 80, y: 60 }, { type: 'bat', x: 200, y: 100 }, { type: 'bat', x: 280, y: 60 }, { type: 'bat', x: 120, y: 180 },
+    { type: 'ghost', x: 200, y: 140 }, { type: 'ghost', x: 80, y: 220 }, { type: 'ghost', x: 260, y: 200 },
+  ],
+  doors: [ { x: 80, y: 272, width: 32, height: 10, targetMap: 'beach', targetX: 336, targetY: 40 } ],
+  playerSpawn: { x: 80, y: 200 },
+};
+
+export const SHADOW_KEEP_MAP = {
+  name: 'shadow_keep', width: 22, height: 18, tileSize: 16,
+  floorTile: 'ruins-floor', isDark: true, hasBoss: true, bossType: 'death_knight',
+  layers: { ground: null, collision: _dungShadow.collision },
+  enemies: [
+    { type: 'undead_knight', x: 80, y: 80 }, { type: 'undead_knight', x: 220, y: 120 },
+    { type: 'undead_knight', x: 160, y: 200 }, { type: 'undead_knight', x: 260, y: 60 },
+    { type: 'zombie', x: 120, y: 160 }, { type: 'zombie', x: 200, y: 240 }, { type: 'zombie', x: 60, y: 120 },
+  ],
+  doors: [ { x: 160, y: 272, width: 32, height: 10, targetMap: 'world', targetX: 208, targetY: 848 } ],
+  playerSpawn: { x: 160, y: 240 },
+};
+
+export const ARCANE_CRYPT_MAP = {
+  name: 'arcane_crypt', width: 22, height: 18, tileSize: 16,
+  floorTile: 'sand-floor', hasBoss: true, bossType: 'sand_lich',
+  layers: { ground: null, collision: _dungArcane.collision },
+  enemies: [
+    { type: 'scorpion', x: 80, y: 80 }, { type: 'scorpion', x: 220, y: 60 }, { type: 'scorpion', x: 160, y: 160 }, { type: 'scorpion', x: 260, y: 120 },
+    { type: 'skeleton', x: 100, y: 200 }, { type: 'skeleton', x: 200, y: 220 }, { type: 'skeleton', x: 60, y: 140 },
+  ],
+  fetchItems: [ { id: 'arcane_tome', x: 272, y: 40, label: 'Tome' } ],
+  doors: [ { x: 160, y: 272, width: 32, height: 10, targetMap: 'desert_valley', targetX: 320, targetY: 440 } ],
+  playerSpawn: { x: 160, y: 240 },
+};
+
+// ---- Phase 18: Wizard Tower (3 floors) ----
+
+export const WIZARD_TOWER_1F_MAP = {
+  name: 'wizard_tower_1f', width: 18, height: 16, tileSize: 16, floorTile: 'cave-floor',
+  layers: { ground: null, collision: _dungWizard1.collision },
+  enemies: [
+    { type: 'skeleton', x: 80, y: 80 }, { type: 'skeleton', x: 200, y: 60 }, { type: 'skeleton', x: 140, y: 160 },
+    { type: 'bat', x: 100, y: 120 }, { type: 'bat', x: 220, y: 140 },
+  ],
+  fetchItems: [ { id: 'tower_key', x: 224, y: 40, label: 'Key' } ],
+  doors: [
+    { x: 144, y: 240, width: 32, height: 10, targetMap: 'wizard_island',   targetX: 240, targetY: 36 },
+    { x: 144, y: 20,  width: 32, height: 10, targetMap: 'wizard_tower_2f', targetX: 144, targetY: 220 },
+  ],
+  playerSpawn: { x: 144, y: 220 },
+};
+
+export const WIZARD_TOWER_2F_MAP = {
+  name: 'wizard_tower_2f', width: 18, height: 16, tileSize: 16, floorTile: 'cave-floor', isDark: true,
+  layers: { ground: null, collision: _dungWizard2.collision },
+  enemies: [
+    { type: 'ghost', x: 80, y: 80 }, { type: 'ghost', x: 200, y: 60 }, { type: 'ghost', x: 120, y: 160 }, { type: 'ghost', x: 220, y: 140 },
+    { type: 'ice_skeleton', x: 160, y: 100 }, { type: 'ice_skeleton', x: 60, y: 140 },
+  ],
+  doors: [
+    { x: 144, y: 240, width: 32, height: 10, targetMap: 'wizard_tower_1f',  targetX: 144, targetY: 40 },
+    { x: 144, y: 20,  width: 32, height: 10, targetMap: 'wizard_tower_top', targetX: 112, targetY: 180 },
+  ],
+  playerSpawn: { x: 144, y: 220 },
+};
+
+export const WIZARD_TOWER_TOP_MAP = {
+  name: 'wizard_tower_top', width: 14, height: 14, tileSize: 16, floorTile: 'cave-floor',
+  hasBoss: true, bossType: 'wizard_boss',
+  layers: { ground: null, collision: [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,1,1,1,1,1,0,0,1,1,1,1,1,1],
+  ] },
+  doors: [ { x: 96, y: 216, width: 32, height: 10, targetMap: 'wizard_tower_2f', targetX: 144, targetY: 40 } ],
+  playerSpawn: { x: 112, y: 180 },
+};
+
+// Phase 26: Shadow Citadel — Lord Dire's lair
+const _shadowCitadelCollision = (() => {
+  const W = 20, H = 18;
+  const g = Array.from({ length: H }, () => Array(W).fill(0));
+  for (let c = 0; c < W; c++) { g[0][c] = 1; g[H - 1][c] = 1; }
+  for (let r = 0; r < H; r++) { g[r][0] = 1; g[r][W - 1] = 1; }
+  // Door opening in south wall at cols 8-11
+  for (let c = 8; c <= 11; c++) g[H - 1][c] = 0;
+  // Decorative pillars
+  [[3, 3],[3, 4],[3, 13],[3, 14],[8, 3],[8, 4],[8, 13],[8, 14]].forEach(([r, c]) => { g[r][c] = 1; });
+  return g;
+})();
+
+export const SHADOW_CITADEL_MAP = {
+  name: 'shadow_citadel',
+  width: 20, height: 18, tileSize: 16,
+  floorTile: 'shadow-floor',
+  isDark: true, hasBoss: true, bossType: 'lord_dire',
+  layers: { ground: null, collision: _shadowCitadelCollision },
+  enemies: [],
+  doors: [
+    { x: 160, y: 272, width: 32, height: 12, targetMap: 'world', targetX: 256, targetY: 780 },
+  ],
+  playerSpawn: { x: 160, y: 260 },
+};
+
+// Phase 20: Farm map collision layout (35×25)
+const _farmCollision = (() => {
+  const W = 35, H = 25;
+  const g = Array.from({ length: H }, () => Array(W).fill(0));
+  // Outer border
+  for (let c = 0; c < W; c++) { g[0][c] = 1; g[H - 1][c] = 1; }
+  for (let r = 0; r < H; r++) { g[r][0] = 1; g[r][W - 1] = 1; }
+  // Gate opening in south wall at cols 15-19
+  for (let c = 15; c <= 19; c++) g[H - 1][c] = 0;
+  // Hay pen top-left: rows 1-4, cols 1-5 (interior open)
+  for (let c = 1; c <= 5; c++) { g[1][c] = 1; g[4][c] = 1; }
+  for (let r = 1; r <= 4; r++) { g[r][1] = 1; g[r][5] = 1; }
+  // Stable top-right: rows 1-5, cols 26-33 (south side open)
+  for (let c = 26; c <= 33; c++) g[1][c] = 1;
+  for (let r = 1; r <= 5; r++) { g[r][26] = 1; g[r][33] = 1; }
+  return g;
+})();
+
+export const FARM_MAP = {
+  name: 'farm',
+  width: 35,
+  height: 25,
+  tileSize: 16,
+  floorTile: 'forest-floor',
+  farmMap: true,
+  layers: { ground: null, collision: _farmCollision },
+  doors: [
+    { x: 240, y: 368, width: 80, height: 16, targetMap: 'world', targetX: 480, targetY: 320 },
+  ],
+  playerSpawn: { x: 280, y: 344 },
+  furniture: [
+    { type: 'cauldron', x: 100, y: 72 },
+  ],
+};
+
 export const MAPS = {
   overworld: OVERWORLD_MAP,
+  world: WORLD_MAP,
   house_interior: HOUSE_INTERIOR_MAP,
   shop_interior: SHOP_INTERIOR_MAP,
   inn_interior: INN_INTERIOR_MAP,
@@ -919,4 +1360,27 @@ export const MAPS = {
   ruins: RUINS_MAP,
   ruins_dungeon: RUINS_DUNGEON_MAP,
   lich_tower: LICH_TOWER_MAP,
+  // Phase 18 new maps
+  beach: BEACH_MAP,
+  desert_valley: DESERT_VALLEY_MAP,
+  wizard_island: WIZARD_ISLAND_MAP,
+  harbor_town: HARBOR_TOWN_MAP,
+  forest_town: FOREST_TOWN_MAP,
+  desert_town: DESERT_TOWN_MAP,
+  harbinn_interior: HARBINN_INTERIOR_MAP,
+  harbshop_interior: HARBSHOP_INTERIOR_MAP,
+  forest_inn: FOREST_INN_MAP,
+  forest_shop: FOREST_SHOP_MAP,
+  desert_inn: DESERT_INN_MAP,
+  desert_shop: DESERT_SHOP_MAP,
+  beach_dungeon: BEACH_DUNGEON_MAP,
+  shadow_keep: SHADOW_KEEP_MAP,
+  arcane_crypt: ARCANE_CRYPT_MAP,
+  wizard_tower_1f: WIZARD_TOWER_1F_MAP,
+  wizard_tower_2f: WIZARD_TOWER_2F_MAP,
+  wizard_tower_top: WIZARD_TOWER_TOP_MAP,
+  // Phase 20
+  farm: FARM_MAP,
+  // Phase 26
+  shadow_citadel: SHADOW_CITADEL_MAP,
 };

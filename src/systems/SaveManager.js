@@ -33,6 +33,8 @@ export class SaveManager {
       _craftCount: gameScene._craftCount || 0,
       _fishCount: gameScene._fishCount || 0,
       _totalGoldEarned: gameScene._totalGoldEarned || 0,
+      _totalKills: gameScene._totalKills || 0,
+      _visitedMaps: Array.from(gameScene._visitedMaps || []),
       weather: gameScene._currentWeather || 'clear',
       _regenBonus: gameScene._regenBonus || 0,
       npcAffection: gameScene.npcAffection || {},
@@ -40,6 +42,49 @@ export class SaveManager {
       npcGiftGiven: gameScene._npcGiftGiven || {},
       fishLuckBonus: gameScene._fishLuckBonus || false,
       jackTreeChoice: gameScene._jackTreeChoice || null,
+      // Phase 15 — Wardrobe
+      equippedOutfit:   gameScene.equippedOutfit   || { hat: null, dress: null, acc: null },
+      unlockedWardrobe: gameScene.unlockedWardrobe  || {},
+      petType:          gameScene.petType            || null,
+      // Phase 20 — Farm
+      farmAnimals:  gameScene.farmAnimals  || { sheep: false, cow: false, horse: false },
+      farmProduces: gameScene.farmProduces || { wool: 0, milk: 0 },
+      farmFed:      gameScene.farmFed      || { sheep: false, cow: false },
+      // Phase 22 — Story Mode + Pet Name
+      storyMode: gameScene.storyMode || false,
+      petName:   gameScene.petName   || null,
+      // Phase 24 — Friends & Flowers
+      flowerGiftsGiven:  gameScene.flowerGiftsGiven  || {},
+      rainbowCrystals:   gameScene.rainbowCrystals   || [],
+      treasureMapsFound: gameScene.treasureMapsFound || [],
+      digSpotsDug:       gameScene.digSpotsDug       || [],
+      stargazerComplete: gameScene.stargazerComplete  || false,
+      // Phase 23 — Gather, Cook & Grow
+      farmAnimalNames:   gameScene.farmAnimalNames   || { sheep: null, cow: null, horse: null },
+      hasNet:            gameScene.hasNet             || false,
+      caughtButterflies: gameScene.caughtButterflies  || {},
+      hasWateringCan:    gameScene.hasWateringCan     || false,
+      seeds:             gameScene.seeds              || {},
+      gardenFlowers:     gameScene.gardenFlowers      || {},
+      // Phase 27 — A Hero's Welcome
+      bearerLetters: gameScene.bearerLetters || [],
+      thankYouGiven: gameScene.thankYouGiven || [],
+      houseCandles:  gameScene.houseCandles  || false,
+      // Phase 28 — Fish Tales & Cozy Seasons
+      caughtFishSpecies: gameScene.caughtFishSpecies || {},
+      dreamsHad:         gameScene.dreamsHad         || 0,
+      seasonTokens:      gameScene.seasonTokens      || [],
+      seasonIndex:       gameScene.seasonIndex       || 0,
+      // Phase 29 — Cozy Corners
+      houseDecor:  gameScene.houseDecor  || {},
+      houseTheme:  gameScene.houseTheme  || null,
+      musicMelody: gameScene.musicMelody || 0,
+      // Phase 30 — Grand Festival
+      festivalComplete: gameScene.festivalComplete || false,
+      festivalStalls:   gameScene.festivalStalls   || [],
+      // Phase 31 — Wishes & Wonders
+      wishesGranted:    gameScene.wishesGranted    || 0,
+      firefliesCaught:  gameScene.firefliesCaught  || 0,
       timestamp: Date.now(),
     };
     try {

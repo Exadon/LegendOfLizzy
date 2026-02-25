@@ -62,6 +62,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this.swordHitbox, false);
     this.swordHitbox.body.enable = false;
 
+    // Phase 15 — Wardrobe: tint for dress, Graphics objects for hat/accessory
+    this._dressTint = null;
+    this._equippedOutfit = { hat: null, dress: null, acc: null };
+    this._lastHatId = undefined; // undefined forces redraw on first frame
+    this.hatGraphic = scene.add.graphics();
+    this.accGraphic = scene.add.graphics();
+
     // Listen for attack animation completion
     this.on('animationcomplete', (anim) => {
       if (anim.key.includes('attack')) {
@@ -86,11 +93,39 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   update(time, delta) {
     if (this.isDead) return;
 
+    // Sync hat/acc Graphics position and depth every frame
+    this._updateCostume();
+
+    // Freeze player movement while the wardrobe (or any overlay) is open
+    if (this.scene.overlayOpen) {
+      this.setVelocity(0, 0);
+      return;
+    }
+
     // Handle dodge roll
     if (this.isDodging) {
       this.dodgeTimer -= delta;
       // Flicker alpha for visual feedback
       this.setAlpha(Math.floor(time / 40) % 2 === 0 ? 0.4 : 0.8);
+
+      // Dodge trail sparkles — emit a pastel circle every ~40ms
+      this._dodgeTrailTimer = (this._dodgeTrailTimer || 0) - delta;
+      if (this._dodgeTrailTimer <= 0) {
+        this._dodgeTrailTimer = 40;
+        const colors = [0xffffff, 0xccddff, 0xffccee, 0xddffdd];
+        const c = colors[Math.floor(Math.random() * colors.length)];
+        const spark = this.scene.add.circle(this.x, this.y, 3, c, 0.8);
+        spark.setDepth(this.y - 1);
+        this.scene.tweens.add({
+          targets: spark,
+          alpha: 0,
+          scaleX: 0.2,
+          scaleY: 0.2,
+          duration: 220,
+          onComplete: () => spark.destroy(),
+        });
+      }
+
       if (this.dodgeTimer <= 0) {
         this.isDodging = false;
         this.invulnerable = false;
@@ -131,6 +166,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.invulnerable = false;
         this.setAlpha(1);
       }
+    }
+
+    // Block attacks while riding horse
+    if (this.scene._ridingHorse) {
+      this.setVelocity(0, 0);
+      return;
     }
 
     // Charge attack: track hold time
@@ -552,8 +593,152 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  // ─── Phase 15: Wardrobe (tint + Graphics approach) ───────────────────────
+
+  /** Called every frame — keeps hat/acc Graphics anchored to Lizzy. */
+  _updateCostume() {
+    this.setDepth(this.y);
+
+    const hatId = this._equippedOutfit.hat;
+    const accId = this._equippedOutfit.acc;
+
+    // Hat is static; only redraw when the equipped hat changes
+    if (hatId !== this._lastHatId) {
+      this._lastHatId = hatId;
+      this.hatGraphic.clear();
+      if (hatId) this._drawHat(hatId);
+    }
+    this.hatGraphic.setPosition(this.x, this.y).setDepth(this.y + 0.2);
+
+    // Accessory redraws every frame (direction-aware)
+    this.accGraphic.clear();
+    if (accId) this._drawAcc(accId);
+    this.accGraphic.setPosition(this.x, this.y).setDepth(this.y + 0.3);
+  }
+
+  /**
+   * Draw hat shape into this.hatGraphic.
+   * All coords are relative to (player.x, player.y); head is ~y = -22.
+   */
+  _drawHat(hatId) {
+    const g = this.hatGraphic;
+    switch (hatId) {
+      case 'hat-crown': {
+        g.fillStyle(0xffdd00, 1);
+        g.fillRect(-7, -30, 14, 4);                              // base band
+        g.fillTriangle(-6, -30, -3, -30, -4.5, -38);            // left point
+        g.fillTriangle(-1.5, -31, 1.5, -31, 0, -40);            // centre point
+        g.fillTriangle(3, -30, 6, -30, 4.5, -38);               // right point
+        g.fillStyle(0xff2244, 1); g.fillCircle(-4, -29, 1.5);   // gem left
+        g.fillStyle(0x4488ff, 1); g.fillCircle(4, -29, 1.5);    // gem right
+        break;
+      }
+      case 'hat-bunnyears': {
+        g.fillStyle(0xff99cc, 1);
+        g.fillEllipse(-5, -38, 6, 14);
+        g.fillEllipse(5, -38, 6, 14);
+        g.fillStyle(0xffccee, 1);
+        g.fillEllipse(-5, -38, 3, 9);
+        g.fillEllipse(5, -38, 3, 9);
+        break;
+      }
+      case 'hat-flowerband': {
+        g.fillStyle(0x33aa33, 1);
+        g.fillRect(-9, -28, 18, 3);
+        [0xff4466, 0xffdd44, 0xff88cc, 0x44ddff].forEach((c, i) => {
+          g.fillStyle(c, 1);
+          g.fillCircle([-6, -2, 2, 6][i], -29, 2.5);
+        });
+        break;
+      }
+      case 'hat-wizardhat': {
+        g.fillStyle(0x6622bb, 1);
+        g.fillTriangle(-8, -28, 8, -28, 0, -46);  // cone
+        g.fillStyle(0x4411aa, 1);
+        g.fillRect(-11, -28, 22, 3);               // brim
+        g.fillStyle(0xffdd44, 1);
+        g.fillCircle(0, -42, 2);                   // star
+        break;
+      }
+      case 'hat-piratehat': {
+        g.fillStyle(0x111111, 1);
+        g.fillRect(-10, -30, 20, 5);
+        g.fillEllipse(0, -32, 14, 7);
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(-2, -31, 1.5);
+        g.fillCircle(2, -31, 1.5);
+        g.fillRect(-2.5, -29, 6, 1.5);             // skull crossbones hint
+        break;
+      }
+    }
+  }
+
+  /** Draw accessory shape into this.accGraphic (direction-aware). */
+  _drawAcc(accId) {
+    const g = this.accGraphic;
+    const dir = this.direction;
+    switch (accId) {
+      case 'acc-wand': {
+        let hx = 0, hy = 0;
+        if (dir === 'right')      { hx =  8; hy =  0; }
+        else if (dir === 'left')  { hx = -8; hy =  0; }
+        else if (dir === 'down')  { hx =  7; hy =  4; }
+        else                      { hx = -5; hy = -12; } // up
+        g.fillStyle(0x885533, 1);
+        g.fillRect(hx - 1, hy - 8, 2, 8);
+        g.fillStyle(0xffdd00, 1);
+        g.fillCircle(hx, hy - 10, 3);
+        g.fillStyle(0xffffff, 0.7);
+        g.fillCircle(hx - 1, hy - 11, 1);
+        break;
+      }
+      case 'acc-cape': {
+        g.fillStyle(0x8822cc, 0.8);
+        if (dir === 'right')     g.fillTriangle(-2, -14, -2, 12, -14, 6);
+        else if (dir === 'left') g.fillTriangle( 2, -14,  2, 12,  14, 6);
+        else if (dir === 'down') g.fillTriangle(-8,  -8,  8, -8,   0, 10);
+        else                     g.fillTriangle(-8,   8,  8,  8,   0, -8);
+        break;
+      }
+      case 'acc-ribbonbow': {
+        // Bow at left shoulder — simple, direction-agnostic
+        g.fillStyle(0xff44aa, 1);
+        g.fillEllipse(-11, -16, 5, 4);
+        g.fillEllipse(-5,  -16, 5, 4);
+        g.fillStyle(0xff88cc, 1);
+        g.fillCircle(-8, -16, 2);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Apply an equipped outfit { hat, dress, acc }.
+   * Dress uses a tint; hat/acc use Graphics redrawn in _updateCostume().
+   */
+  setOutfit(outfit) {
+    if (!outfit) return;
+    this._equippedOutfit = { ...outfit };
+
+    const DRESS_TINTS = {
+      'outfit-princess': 0xffaabb,
+      'outfit-wizard':   0x9955ee,
+      'outfit-pirate':   0xaa8866,
+      'outfit-bunny':    0xffeeff,
+      'outfit-fairy':    0xaaffcc,
+    };
+    const tint = outfit.dress ? (DRESS_TINTS[outfit.dress] || null) : null;
+    this._dressTint = tint;
+    if (tint) this.setTint(tint); else this.clearTint();
+
+    // Force hat redraw on next update frame
+    this._lastHatId = undefined;
+  }
+
   takeDamage(amount = 1) {
     if (this.invulnerable) return;
+
+    if (this.scene.storyMode) amount = Math.max(1, Math.ceil(amount / 2));
 
     this.health -= amount;
     this.invulnerable = true;
@@ -562,7 +747,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // White damage flash (200ms for better feedback)
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(200, () => {
-      if (this.active) this.clearTint();
+      if (!this.active) return;
+      if (this._dressTint) this.setTint(this._dressTint); else this.clearTint();
     });
 
     // Camera shake on hit (not on death — death has its own)

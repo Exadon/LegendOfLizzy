@@ -131,6 +131,94 @@ export class MapOverlay {
     return label;
   }
 
+  _drawWorldMap(worldW, worldH) {
+    const { mapGfx, mapX, mapY, mapW, mapH } = this;
+    const wx = (px) => mapX + (px / worldW) * mapW;
+    const wy = (py) => mapY + (py / worldH) * mapH;
+
+    mapGfx.clear();
+
+    // Base: green
+    mapGfx.fillStyle(0x4a8c3f);
+    mapGfx.fillRect(mapX, mapY, mapW, mapH);
+
+    // Forest biomes (left side — dark green)
+    mapGfx.fillStyle(0x2a5c2a);
+    mapGfx.fillRect(mapX, wy(192), wx(288) - mapX, wy(704) - wy(192));
+    mapGfx.fillRect(mapX, wy(640), wx(384) - mapX, mapY + mapH - wy(640));
+
+    // Desert biome (top-right — sandy)
+    mapGfx.fillStyle(0xccaa66);
+    mapGfx.fillRect(wx(864), mapY, mapX + mapW - wx(864), wy(448) - mapY);
+
+    // Sea/water (bottom strip at harbor)
+    mapGfx.fillStyle(0x3366bb);
+    mapGfx.fillRect(wx(480), wy(800), wx(800) - wx(480), mapY + mapH - wy(800));
+
+    // Town cluster (center-right) — brown buildings
+    mapGfx.fillStyle(0x8b5e3c);
+    mapGfx.fillRect(wx(590), wy(150), 8, 6);
+    mapGfx.fillRect(wx(710), wy(150), 8, 6);
+    mapGfx.fillRect(wx(670), wy(230), 8, 6);
+    mapGfx.fillRect(wx(750), wy(190), 8, 6);
+    this._addLabel(wx(670), wy(160), 'Town', '#ddccaa', 8);
+
+    // Farm
+    mapGfx.fillRect(wx(470), wy(278), 8, 6);
+    this._addLabel(wx(474), wy(269), 'Farm', '#ddccaa', 7);
+
+    // Dungeon entrances (red triangles)
+    const dungeons = [
+      { x: 80,  y: 80,  label: 'Cave',    col: '#ff8888' },
+      { x: 848, y: 80,  label: 'Temple',  col: '#ff8888' },
+      { x: 320, y: 416, label: 'Forest',  col: '#88ff88' },
+      { x: 512, y: 16,  label: 'Mountain',col: '#aaddff' },
+      { x: 640, y: 848, label: 'Harbor',  col: '#88aaff' },
+      { x: 80,  y: 832, label: 'Ruins',   col: '#aaaacc' },
+      { x: 192, y: 832, label: 'Keep',    col: '#aaaacc' },
+      { x: 1040,y: 288, label: 'Crypt',   col: '#cc88ff' },
+    ];
+    for (const d of dungeons) {
+      const ex = wx(d.x), ey = wy(d.y);
+      mapGfx.fillStyle(0xcc4444);
+      mapGfx.fillTriangle(ex, ey - 4, ex - 4, ey + 3, ex + 4, ey + 3);
+      this._addLabel(ex, ey + 6, d.label, d.col, 7);
+    }
+
+    // Sub-towns
+    const towns = [
+      { x: 640, y: 96,  label: 'Harbor Town', col: '#88aaff' },
+      { x: 192, y: 384, label: 'Forest Town',  col: '#88ff88' },
+      { x: 880, y: 224, label: 'Desert Town',  col: '#ffdd88' },
+    ];
+    mapGfx.fillStyle(0x8b5e3c);
+    for (const t of towns) {
+      mapGfx.fillRect(wx(t.x) - 4, wy(t.y) - 3, 8, 6);
+      this._addLabel(wx(t.x), wy(t.y) - 8, t.label, t.col, 7);
+    }
+
+    // Lich Tower (center, purple)
+    mapGfx.fillStyle(0x8800cc);
+    const ltx = wx(624), lty = wy(448);
+    mapGfx.fillTriangle(ltx, lty - 5, ltx - 4, lty + 4, ltx + 4, lty + 4);
+    this._addLabel(ltx, lty + 7, 'Lich Tower', '#dd88ff', 7);
+
+    // Shadow Citadel (left-center, dark)
+    mapGfx.fillStyle(0x220033);
+    const scx = wx(256), scy = wy(768);
+    mapGfx.fillRect(scx - 4, scy - 4, 8, 8);
+    this._addLabel(scx, scy - 8, 'Citadel', '#dd44ff', 7);
+
+    // Teleport stone (blue diamond)
+    const ts = { x: 480, y: 320, name: 'World Stone' };
+    const tsx = wx(ts.x), tsy = wy(ts.y);
+    mapGfx.fillStyle(0x4488ff);
+    mapGfx.fillRect(tsx - 3, tsy - 3, 6, 6);
+    this._addLabel(tsx, tsy + 7, ts.name, '#88aaff', 7);
+
+    this.titleText.setText('WORLD MAP');
+  }
+
   _drawOverworldMap(worldW, worldH) {
     const { mapGfx, mapX, mapY, mapW, mapH } = this;
 
@@ -467,7 +555,9 @@ export class MapOverlay {
     this._unlockedTeleports = unlockedTeleports || [];
 
     // Draw the appropriate map
-    if (mapName === 'overworld') {
+    if (mapName === 'world') {
+      this._drawWorldMap(worldW, worldH);
+    } else if (mapName === 'overworld') {
       this._drawOverworldMap(worldW, worldH);
     } else if (mapName === 'forest') {
       this._drawForestMap(worldW, worldH);
@@ -486,7 +576,7 @@ export class MapOverlay {
     }
 
     // Fog-of-war overlay for explored maps
-    const fogMaps = ['overworld', 'forest', 'town2', 'mountain', 'harbor', 'ruins'];
+    const fogMaps = ['world', 'overworld', 'forest', 'town2', 'mountain', 'harbor', 'ruins'];
     if (fogMaps.includes(mapName)) {
       this._drawFogOfWar(mapName, worldW, worldH);
     }

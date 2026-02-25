@@ -160,14 +160,16 @@ export class LichKing extends Phaser.Physics.Arcade.Sprite {
       bolt.body.setAllowGravity(false);
       bolt.damage = this.damage;
 
-      this.scene.physics.add.overlap(this.scene.player, bolt, () => {
+      const ov = this.scene.physics.add.overlap(this.scene.player, bolt, () => {
         if (!bolt.active) return;
         if (!this.scene.player.invulnerable) {
           this.scene.player.takeDamage(1);
           if (this.scene.sfx) this.scene.sfx.play('playerHurt');
         }
+        this.scene.physics.world.removeCollider(ov);
         bolt.destroy();
       });
+      bolt.on('destroy', () => this.scene.physics.world.removeCollider(ov));
 
       this._addTimer(this.scene.time.delayedCall(1800, () => {
         if (bolt.active) bolt.destroy();
@@ -193,7 +195,7 @@ export class LichKing extends Phaser.Physics.Arcade.Sprite {
       bolt.slow = true;
       bolt.damage = 1;
 
-      this.scene.physics.add.overlap(this.scene.player, bolt, () => {
+      const ov = this.scene.physics.add.overlap(this.scene.player, bolt, () => {
         if (!bolt.active) return;
         if (!this.scene.player.invulnerable) {
           this.scene.player.takeDamage(1);
@@ -205,8 +207,10 @@ export class LichKing extends Phaser.Physics.Arcade.Sprite {
             if (this.scene.player) this.scene.player.speed = origSpeed;
           });
         }
+        this.scene.physics.world.removeCollider(ov);
         bolt.destroy();
       });
+      bolt.on('destroy', () => this.scene.physics.world.removeCollider(ov));
 
       this._addTimer(this.scene.time.delayedCall(1500, () => {
         if (bolt.active) bolt.destroy();
@@ -254,7 +258,7 @@ export class LichKing extends Phaser.Physics.Arcade.Sprite {
     bolt1.body.setVelocity(Math.cos(angle1) * 160, Math.sin(angle1) * 160);
     bolt1.body.setAllowGravity(false);
 
-    this.scene.physics.add.overlap(this.scene.player, bolt1, () => {
+    const ov = this.scene.physics.add.overlap(this.scene.player, bolt1, () => {
       if (!bolt1.active) return;
       if (!this.scene.player.invulnerable) {
         this.scene.player.takeDamage(this.damage);
@@ -267,8 +271,10 @@ export class LichKing extends Phaser.Physics.Arcade.Sprite {
         this._drawLightningArc(gx1, gy1, gx2, gy2);
         if (chainTarget.takeDamage) chainTarget.takeDamage(2);
       }
+      this.scene.physics.world.removeCollider(ov);
       bolt1.destroy();
     });
+    bolt1.on('destroy', () => this.scene.physics.world.removeCollider(ov));
 
     this._addTimer(this.scene.time.delayedCall(1500, () => {
       if (bolt1.active) bolt1.destroy();
@@ -380,6 +386,12 @@ export class LichKing extends Phaser.Physics.Arcade.Sprite {
 
     this._timers = [];
     this.scene.events.emit('boss-defeated');
+
+    // Crystal drop — the final Light Shard
+    const _bx = this.x, _by = this.y;
+    this.scene.time.delayedCall(600, () => {
+      if (this.scene && this.scene._dropCrystal) this.scene._dropCrystal(_bx, _by + 20, 0xff88cc, 'crystal_pink');
+    });
 
     // Trigger lich-specific victory (not regular checkVictory)
     this.scene.time.delayedCall(1000, () => {

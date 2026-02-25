@@ -127,6 +127,81 @@ const TRACKS = {
     bassVol: 0.05,
     melodyVol: 0.02,
   },
+  forest: {
+    bpm: 95,
+    // Gm: gentle/mysterious arpeggio
+    chords: [
+      [196, 233, 294],  // Gm (G3/Bb3/D4)
+      [175, 220, 262],  // Fm approx
+      [196, 233, 294],  // Gm
+      [220, 262, 349],  // Cm approx
+    ],
+    bass: [98, 87, 98, 110],
+    melody: [
+      294, 349, 294, 233, 196, 233, 294, 0,
+      262, 294, 349, 294, 262, 233, 196, 0,
+      349, 294, 262, 233, 196, 233, 262, 294,
+      349, 294, 262, 233, 196, 0, 196, 0,
+    ],
+    arpSpeed: 2,
+    melodySpeed: 1,
+    wave: 'sine',
+    bassWave: 'triangle',
+    melodyWave: 'sine',
+    volume: 0.03,
+    bassVol: 0.05,
+    melodyVol: 0.025,
+  },
+  mountain: {
+    bpm: 70,
+    // Am: sparse, cold and lonely
+    chords: [
+      [110, 165, 220],  // Am (A2/E3/A3)
+      [98, 147, 196],   // Gm approx
+      [110, 165, 220],  // Am
+      [87, 131, 175],   // Fm approx
+    ],
+    bass: [55, 49, 55, 44],
+    melody: [
+      220, 0, 0, 0, 165, 0, 0, 0,
+      0, 0, 220, 0, 0, 247, 0, 0,
+      220, 0, 0, 165, 0, 0, 110, 0,
+      0, 0, 165, 0, 220, 0, 0, 0,
+    ],
+    arpSpeed: 1,
+    melodySpeed: 0.4,
+    wave: 'sine',
+    bassWave: 'sine',
+    melodyWave: 'sine',
+    volume: 0.025,
+    bassVol: 0.04,
+    melodyVol: 0.02,
+  },
+  ruins: {
+    bpm: 80,
+    // Dm: eerie, sawtooth bass + slow sine melody
+    chords: [
+      [73, 87, 110],    // Dm (D2/F2/A2)
+      [65, 82, 110],    // Cm approx
+      [73, 87, 110],    // Dm
+      [87, 110, 131],   // Em approx
+    ],
+    bass: [37, 33, 37, 44],
+    melody: [
+      0, 293, 0, 0, 261, 0, 0, 0,
+      349, 0, 0, 293, 0, 261, 0, 0,
+      0, 0, 220, 0, 261, 0, 293, 0,
+      349, 0, 0, 261, 0, 0, 220, 0,
+    ],
+    arpSpeed: 1.5,
+    melodySpeed: 0.5,
+    wave: 'sawtooth',
+    bassWave: 'sawtooth',
+    melodyWave: 'sine',
+    volume: 0.03,
+    bassVol: 0.05,
+    melodyVol: 0.025,
+  },
   desert: {
     bpm: 100,
     // Pentatonic open fifths, lighter feel

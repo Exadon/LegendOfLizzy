@@ -175,6 +175,14 @@ export class FishingMinigame {
       bonusText = ' Harbor bonus!';
     }
 
+    // Catch streak: consecutive catches this session give escalating XP bonus
+    scene._fishStreak = (scene._fishStreak || 0) + 1;
+    if (scene._fishStreak >= 2) {
+      const streakBonus = (scene._fishStreak - 1) * 5;
+      xp += streakBonus;
+      bonusText += ` 🎣×${scene._fishStreak} streak!`;
+    }
+
     scene.showNotification(`Caught a ${this.fish.name}! +${gold}g +${xp}XP${bonusText}`);
     scene.addGold(gold);
     scene.addXP(xp);
@@ -182,6 +190,9 @@ export class FishingMinigame {
     // Track fish count for achievements
     scene._fishCount = (scene._fishCount || 0) + 1;
     if (scene._checkAchievements) scene._checkAchievements();
+
+    // Phase 28 — record species for journal
+    if (scene._recordFishCatch) scene._recordFishCatch(scene.mapData?.name, this.fish.name);
 
     // Track fishing quest
     const updated = scene.questManager.trackEvent('fish', { target: 'any' });
@@ -192,6 +203,7 @@ export class FishingMinigame {
 
   _catchFail() {
     this.scene.sfx.play('menuCancel');
+    this.scene._fishStreak = 0; // reset streak on miss
     this.scene.showNotification('The fish got away...');
     this.scene.time.delayedCall(600, () => this.close());
   }
@@ -201,6 +213,7 @@ export class FishingMinigame {
       this.container.destroy();
       this.container = null;
     }
+    if (this._spaceKey) { this._spaceKey.destroy(); this._spaceKey = null; }
     this.active = false;
   }
 }

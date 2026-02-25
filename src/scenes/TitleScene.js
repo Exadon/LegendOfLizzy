@@ -93,8 +93,23 @@ export class TitleScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
+    // Subtitle and version
+    this.add.text(w / 2, h / 3 + 22, 'A cozy adventure', {
+      fontSize: '10px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#888899',
+      fontStyle: 'normal',
+    }).setOrigin(0.5);
+
+    this.add.text(w - 4, h - 4, 'v1.0', {
+      fontSize: '9px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#444466',
+      fontStyle: 'normal',
+    }).setOrigin(1, 1);
+
     // Floating leaf particles
-    this.time.addEvent({
+    this._leafEvent = this.time.addEvent({
       delay: 600,
       callback: () => {
         const lx = -10;
@@ -165,10 +180,11 @@ export class TitleScene extends Phaser.Scene {
     // Start game - continue from save
     this.input.keyboard.once('keydown-ENTER', () => {
       sfx.play('select');
-      if (this.music) this.music.fadeOut(0.4);
-      this.cameras.main.fadeOut(400, 0, 0, 0);
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        if (hasSave) {
+      if (hasSave) {
+        // Continue existing save — preserve storyMode from save
+        if (this.music) this.music.fadeOut(0.4);
+        this.cameras.main.fadeOut(400, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
           const save = SaveManager.load();
           if (save) {
             const mapData = MAPS[save.mapName] || MAPS.overworld;
@@ -200,25 +216,131 @@ export class TitleScene extends Phaser.Scene {
               petAffection: save.petAffection || 0,
               visitedChunks: save.visitedChunks || {},
               lichTowerUnlocked: save.lichTowerUnlocked || false,
+              achievements: save.achievements || {},
+              _craftCount: save._craftCount || 0,
+              _fishCount: save._fishCount || 0,
+              _totalGoldEarned: save._totalGoldEarned || 0,
+              _totalKills: save._totalKills || 0,
+              _visitedMaps: save._visitedMaps || [],
+              weather: save.weather || 'clear',
+              _regenBonus: save._regenBonus || 0,
+              npcAffection: save.npcAffection || {},
+              storyChoices: save.storyChoices || {},
+              npcGiftGiven: save.npcGiftGiven || {},
+              fishLuckBonus: save.fishLuckBonus || false,
+              jackTreeChoice: save.jackTreeChoice || null,
+              equippedOutfit:   save.equippedOutfit   || { hat: null, dress: null, acc: null },
+              unlockedWardrobe: save.unlockedWardrobe || {},
+              farmAnimals:  save.farmAnimals  || { sheep: false, cow: false, horse: false },
+              farmProduces: save.farmProduces || { wool: 0, milk: 0 },
+              farmFed:      save.farmFed      || { sheep: false, cow: false },
+              petType: save.petType || null,
+              storyMode: save.storyMode || false,
+              petName: save.petName || null,
+              farmAnimalNames: save.farmAnimalNames || null,
+              hasNet: save.hasNet || false,
+              caughtButterflies: save.caughtButterflies || {},
+              hasWateringCan: save.hasWateringCan || false,
+              seeds: save.seeds || {},
+              gardenFlowers: save.gardenFlowers || {},
+              flowerGiftsGiven: save.flowerGiftsGiven || {},
+              treasureMapsFound: save.treasureMapsFound || [],
+              digSpotsDug: save.digSpotsDug || [],
+              stargazerComplete: save.stargazerComplete || false,
+              rainbowCrystals:  save.rainbowCrystals  || [],
+              bearerLetters: save.bearerLetters || [],
+              thankYouGiven: save.thankYouGiven || [],
+              houseCandles:  save.houseCandles  || false,
+              caughtFishSpecies: save.caughtFishSpecies || {},
+              dreamsHad:         save.dreamsHad         || 0,
+              seasonTokens:      save.seasonTokens      || [],
+              seasonIndex:       save.seasonIndex       || 0,
+              houseDecor:  save.houseDecor  || {},
+              houseTheme:  save.houseTheme  || null,
+              musicMelody: save.musicMelody || 0,
+              festivalComplete: save.festivalComplete || false,
+              festivalStalls:   save.festivalStalls   || [],
+              wishesGranted:    save.wishesGranted    || 0,
+              firefliesCaught:  save.firefliesCaught  || 0,
             });
             return;
           }
-        }
-        this.scene.start('Game');
-      });
+          this.scene.start('Game');
+        });
+      } else {
+        // No save — show mode picker before starting
+        this._showModePicker((storyMode) => {
+          if (this.music) this.music.fadeOut(0.4);
+          this.cameras.main.fadeOut(400, 0, 0, 0);
+          this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.start('Game', { storyMode });
+          });
+        });
+      }
     });
 
-    // New game (deletes save)
+    // New game (deletes save) — always show mode picker
     if (hasSave) {
       this.input.keyboard.once('keydown-N', () => {
         SaveManager.deleteSave();
         sfx.play('select');
-        if (this.music) this.music.fadeOut(0.4);
-        this.cameras.main.fadeOut(400, 0, 0, 0);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-          this.scene.start('Game');
+        this._showModePicker((storyMode) => {
+          if (this.music) this.music.fadeOut(0.4);
+          this.cameras.main.fadeOut(400, 0, 0, 0);
+          this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.start('Game', { storyMode });
+          });
         });
       });
     }
+  }
+
+  _showModePicker(onChoose) {
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const d = 20;
+
+    this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.65).setDepth(d);
+    this.add.rectangle(w / 2, h / 2, 214, 102, 0xcc88ff).setDepth(d + 1);
+    this.add.rectangle(w / 2, h / 2, 210, 98, 0x1a0a2e).setDepth(d + 2);
+
+    this.add.text(w / 2, h / 2 - 36, 'Choose your adventure!', {
+      fontSize: '11px', fontFamily: 'Arial, sans-serif',
+      color: '#ffffff', fontStyle: 'normal',
+    }).setOrigin(0.5).setDepth(d + 3);
+
+    this.add.text(w / 2, h / 2 - 14, '[1]  Adventure Mode', {
+      fontSize: '11px', fontFamily: 'Arial, sans-serif',
+      color: '#ffdd00', fontStyle: 'normal',
+    }).setOrigin(0.5).setDepth(d + 3);
+    this.add.text(w / 2, h / 2 - 2, 'Normal difficulty', {
+      fontSize: '9px', fontFamily: 'Arial, sans-serif',
+      color: '#aaaacc', fontStyle: 'normal',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(d + 3);
+
+    this.add.text(w / 2, h / 2 + 18, '[2]  Story Mode  \u2665', {
+      fontSize: '11px', fontFamily: 'Arial, sans-serif',
+      color: '#88ccff', fontStyle: 'normal',
+      stroke: '#000033', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(d + 3);
+    this.add.text(w / 2, h / 2 + 30, 'Half damage — perfect for young adventurers', {
+      fontSize: '8px', fontFamily: 'Arial, sans-serif',
+      color: '#aaaacc', fontStyle: 'normal',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(d + 3);
+
+    let chosen = false;
+    const choose = (storyMode) => {
+      if (chosen) return;
+      chosen = true;
+      onChoose(storyMode);
+    };
+    this.input.keyboard.once('keydown-ONE', () => choose(false));
+    this.input.keyboard.once('keydown-TWO', () => choose(true));
+  }
+
+  shutdown() {
+    if (this._leafEvent) { this._leafEvent.remove(false); this._leafEvent = null; }
   }
 }

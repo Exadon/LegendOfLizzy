@@ -586,7 +586,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   _generatePortraits() {
-    // Crop top 24x24 of each NPC's first frame for dialogue portraits
+    // Crop top-center 40x40 of each NPC's first frame for dialogue portraits
     const npcTextures = [
       'farmer-bob', 'farmer-buba', 'chef-chloe',
       'fisherman-fin', 'lumberjack-jack', 'miner-mike',
@@ -596,11 +596,12 @@ export class PreloadScene extends Phaser.Scene {
       if (!tex || tex.key === '__MISSING') continue;
       const source = tex.getSourceImage();
       const canvas = document.createElement('canvas');
-      canvas.width = 24;
-      canvas.height = 24;
+      canvas.width = 36;
+      canvas.height = 36;
       const ctx = canvas.getContext('2d');
-      // Crop center-top 24x24 from 64x64 first frame
-      ctx.drawImage(source, 20, 4, 24, 24, 0, 0, 24, 24);
+      // Crop a wider center-top region (x=12, y=4, w=40, h=40) scaled to 36x36
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(source, 12, 4, 40, 40, 0, 0, 36, 36);
       this.textures.addCanvas(`portrait-${key}`, canvas);
     }
   }

@@ -293,10 +293,12 @@ export class OrcChief extends Phaser.Physics.Arcade.Sprite {
 
     this._timers = [];
     this.scene.events.emit('boss-defeated');
+    const _bx = this.x, _by = this.y;
+    this.scene.time.delayedCall(600, () => {
+      if (this.scene && this.scene._dropCrystal) this.scene._dropCrystal(_bx, _by + 20, 0xffee00, 'crystal_yellow');
+    });
     this.scene.time.delayedCall(500, () => {
-      this.hpBarBg.destroy();
-      this.hpBarFill.destroy();
-      this.nameText.destroy();
+      this._destroyVisuals();
       this.destroy();
       this.scene.checkVictory();
     });

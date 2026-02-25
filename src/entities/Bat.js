@@ -107,7 +107,7 @@ export class Bat extends Phaser.Physics.Arcade.Sprite {
       // Flash
       this.batBody.setFillStyle(0xffffff);
       this.scene.time.delayedCall(80, () => {
-        if (this.batBody.active) this.batBody.setFillStyle(0x332244);
+        if (this.active && this.batBody && this.batBody.active) this.batBody.setFillStyle(0x332244);
       });
     }
   }

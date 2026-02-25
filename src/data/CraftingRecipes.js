@@ -4,6 +4,8 @@ export const MATERIALS = {
   bone_dust: { id: 'bone_dust', name: 'Bone Dust', color: '#ddddbb' },
   yeti_fur: { id: 'yeti_fur', name: 'Yeti Fur', color: '#ccddee' },
   sea_essence: { id: 'sea_essence', name: 'Sea Essence', color: '#4488ff' },
+  wool: { id: 'wool', name: 'Wool', color: '#eeeedd' },
+  milk: { id: 'milk', name: 'Milk', color: '#ffffff' },
 };
 
 // Material drop sources for _tryDropMaterial in GameScene
@@ -63,5 +65,12 @@ export const CRAFTING_RECIPES = [
     ],
     result: { type: 'item', id: 'speed_potion', count: 1 },
     description: '1 Slime Goo + 1 Sea Essence → Speed Potion',
+  },
+  {
+    id: 'craft_wool_blanket',
+    name: 'Wool Blanket',
+    ingredients: [{ material: 'wool', count: 3 }],
+    result: { type: 'maxHP', amount: 2 },
+    description: '3 Wool → Wool Blanket (+2 Max HP)',
   },
 ];

@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { EQUIPMENT } from '../systems/Equipment.js';
 import { BESTIARY_LORE } from '../data/BestiaryLore.js';
+import { MATERIALS } from '../data/CraftingRecipes.js';
 
-const TABS = ['Stats', 'Quests', 'Bestiary', 'Menu', 'Settings', 'Medals'];
+const TABS = ['Stats', 'Quests', 'Bestiary', 'Menu', 'Settings', 'Medals', 'Keys'];
 
 const ACHIEVEMENTS = [
+  // Phase 8-9
   { id: 'first_blood',     label: 'First Blood',     desc: 'Defeat your first enemy.' },
   { id: 'boss_slayer',     label: 'Boss Slayer',      desc: 'Defeat all 6 dungeon bosses.' },
   { id: 'lich_vanquished', label: 'Lich Vanquished',  desc: 'Defeat the Lich King.' },
@@ -13,7 +15,25 @@ const ACHIEVEMENTS = [
   { id: 'hoarder',         label: 'Hoarder',          desc: 'Collect 1000 gold total.' },
   { id: 'explorer',        label: 'Explorer',         desc: 'Visit all 20 maps.' },
   { id: 'true_hero',       label: 'True Hero',        desc: 'Achieve the true ending.' },
-  { id: 'storyteller',    label: 'Storyteller',      desc: 'Complete all 4 NPC story arcs.' },
+  // Phase 14
+  { id: 'storyteller',     label: 'Storyteller',      desc: 'Complete all 4 NPC story arcs.' },
+  // Phase 23-25
+  { id: 'butterfly_collector', label: 'Nature Lover',    desc: 'Catch a butterfly of every color.' },
+  { id: 'beloved_friend',      label: 'Beloved Friend',  desc: 'Gift flowers to 5 different friends.' },
+  { id: 'stargazer',           label: 'Stargazer',       desc: 'Name all three constellations.' },
+  { id: 'treasure_hunter',     label: 'Treasure Hunter', desc: 'Dig up all 3 buried treasures.' },
+  { id: 'rainbow_chaser',      label: 'Rainbow Chaser',  desc: 'Collect all 7 rainbow crystals.' },
+  // Phase 26-28
+  { id: 'lord_dire_vanquished', label: 'Light Bringer',  desc: 'Defeat Lord Dire, the Lord of Darkness.' },
+  { id: 'loremaster',    label: 'Loremaster',   desc: 'Collect all 7 Crystal Bearer Letters.' },
+  { id: 'master_angler', label: 'Master Angler', desc: 'Catch all 8 fish species.' },
+  { id: 'all_seasons',   label: 'All Seasons',   desc: 'Collect a seasonal sparkle in every season.' },
+  // Phase 29-31
+  { id: 'decorate_home',  label: 'Home Decorator', desc: 'Buy 3 furniture items from Clara.' },
+  { id: 'grand_festival', label: 'Town Hero',      desc: 'Complete the Grand Festival celebrations.' },
+  { id: 'firefly_friend', label: 'Firefly Friend', desc: 'Catch 5 fireflies on the world map.' },
+  // Bestiary
+  { id: 'bestiary_expert', label: 'Creature Scholar', desc: 'Discover all 21 creatures in the Bestiary.' },
 ];
 
 export class GameMenu {
@@ -23,6 +43,7 @@ export class GameMenu {
     this.activeTab = 0;
     this.questPage = 0;
     this.questTotalPages = 1;
+    this.medalPage = 0;
     this.menuCursor = 0;
     this.settingsCursor = 0; // 0=music, 1=sfx
     this._questEntries = [];
@@ -40,117 +61,101 @@ export class GameMenu {
     const overlay = scene.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.65);
     this.container.add(overlay);
 
-    // Book dimensions — fill most of the viewport
-    const bookW = 280;
-    const bookH = 168;
-    const bookX = w / 2;
-    const bookY = h / 2 + 6;
-    const bookLeft = bookX - bookW / 2;
-    const bookTop = bookY - bookH / 2;
+    // Panel dimensions
+    const panelW = 284;
+    const panelH = 170;
+    const panelX = w / 2;
+    const panelY = h / 2 + 4;
+    const panelLeft = panelX - panelW / 2;
+    const panelTop = panelY - panelH / 2;
+    const panelBottom = panelTop + panelH;
 
-    this.bookX = bookX;
-    this.bookY = bookY;
-    this.bookW = bookW;
-    this.bookH = bookH;
-    this.bookLeft = bookLeft;
-    this.bookTop = bookTop;
+    // Content areas (set before building tabs/texts so they're available)
+    this.leftX = panelLeft + 8;
+    this.leftW = 130;
+    this.rightX = panelLeft + 150;
+    this.rightW = panelLeft + panelW - 8 - (panelLeft + 150); // 126
+    this.pageTop = panelTop + 24; // 20px tab strip + 4px gap
+    this.pageBottom = panelBottom - 10;
 
-    // Page content areas — two columns with spine gap
-    const margin = 14;
-    const spineGap = 10;
-    const pageW = (bookW - margin * 2 - spineGap) / 2;
-    this.leftX = bookLeft + margin;
-    this.leftW = pageW;
-    this.rightX = bookX + spineGap / 2;
-    this.rightW = pageW;
-    this.pageTop = bookTop + margin;
-    this.pageBottom = bookTop + bookH - margin;
+    // Border rect (rendered first, behind fill)
+    const border = scene.add.rectangle(panelX, panelY, panelW + 4, panelH + 4, 0x4455aa);
+    this.container.add(border);
 
-    // Book background
-    const book = scene.add.image(bookX, bookY, 'book-ui', 'book-open-tan');
-    book.setDisplaySize(bookW, bookH);
-    this.container.add(book);
+    // Fill rect
+    const fill = scene.add.rectangle(panelX, panelY, panelW, panelH, 0x111133);
+    this.container.add(fill);
 
-    // --- Tab buttons above the book ---
-    this.tabActiveBgs = [];
-    this.tabInactiveBgs = [];
+    // --- Tab strip (inside panel top row, 20px tall) ---
+    this.tabRects = [];
     this.tabTexts = [];
     this.tabHitAreas = [];
-    const tabW = 40;
-    const tabH = 18;
-    const activeTabH = 22;
-    const tabY = bookTop - tabH / 2 + 2;
-    const activeTabY = bookTop - activeTabH / 2 + 2;
-    const tabStartX = bookX - (TABS.length * (tabW + 4)) / 2 + tabW / 2;
+    const tabW = 36;
+    const tabH = 20;
+    const tabGap = 4;
+    const tabStripY = panelTop + tabH / 2; // center of 20px strip
+    const tabStartX = panelLeft + 4 + tabW / 2; // 4px margin + half-tab
 
+    this._tabClickAreas = [];
     for (let i = 0; i < TABS.length; i++) {
-      const tx = tabStartX + i * (tabW + 4);
+      const tx = tabStartX + i * (tabW + tabGap);
 
-      const activeBg = scene.add.nineslice(
-        tx, activeTabY, 'ui-frames', 'tab-orange',
-        tabW, activeTabH, 3, 3, 3, 3
-      );
-      this.container.add(activeBg);
-      this.tabActiveBgs.push(activeBg);
+      const tabRect = scene.add.rectangle(tx, tabStripY, tabW, tabH, 0x1a2244);
+      this.container.add(tabRect);
+      this.tabRects.push(tabRect);
 
-      const inactiveBg = scene.add.nineslice(
-        tx, tabY, 'ui-frames', 'tab-gray',
-        tabW, tabH, 3, 3, 3, 3
-      );
-      this.container.add(inactiveBg);
-      this.tabInactiveBgs.push(inactiveBg);
-
-      const tabLabel = scene.add.text(tx, tabY, TABS[i], {
-        fontSize: '10px',
+      const tabLabel = scene.add.text(tx, tabStripY, TABS[i], {
+        fontSize: '9px',
         fontFamily: 'Arial, sans-serif',
-        color: '#3d2510',
+        color: '#7788aa',
         fontStyle: 'bold',
       }).setOrigin(0.5);
       this.container.add(tabLabel);
       this.tabTexts.push(tabLabel);
 
-      const hitZone = scene.add.rectangle(tx, tabY, tabW, activeTabH, 0x000000, 0)
-        .setInteractive({ useHandCursor: true });
-      const tabIdx = i;
-      hitZone.on('pointerdown', () => {
-        if (this.visible) this._switchTab(tabIdx);
-      });
-      this.container.add(hitZone);
-      this.tabHitAreas.push(hitZone);
+      // Store logical position for manual pointer hit-testing (setInteractive on
+      // scrollFactor=0 container children is unreliable with a viewport y-offset)
+      this._tabClickAreas.push({ x: tx, y: tabStripY, hw: tabW / 2, hh: tabH / 2 });
     }
 
     // --- Page content (dynamic) ---
     this.leftTitle = scene.add.text(this.leftX + this.leftW / 2, this.pageTop, '', {
-      fontSize: '11px', fontFamily: 'Arial, sans-serif',
-      color: '#3d2510', fontStyle: 'bold',
+      fontSize: '10px', fontFamily: 'Arial, sans-serif',
+      color: '#aabbee', fontStyle: 'bold',
     }).setOrigin(0.5, 0);
     this.container.add(this.leftTitle);
 
-    this.leftContent = scene.add.text(this.leftX, this.pageTop + 16, '', {
-      fontSize: '10px', fontFamily: 'Arial, sans-serif',
-      color: '#3d2510', lineSpacing: 2,
+    this.leftContent = scene.add.text(this.leftX, this.pageTop + 13, '', {
+      fontSize: '9px', fontFamily: 'Arial, sans-serif',
+      color: '#ccddff', lineSpacing: 2,
       wordWrap: { width: this.leftW },
     });
     this.container.add(this.leftContent);
 
     this.rightTitle = scene.add.text(this.rightX + this.rightW / 2, this.pageTop, '', {
-      fontSize: '11px', fontFamily: 'Arial, sans-serif',
-      color: '#3d2510', fontStyle: 'bold',
+      fontSize: '10px', fontFamily: 'Arial, sans-serif',
+      color: '#aabbee', fontStyle: 'bold',
     }).setOrigin(0.5, 0);
     this.container.add(this.rightTitle);
 
-    this.rightContent = scene.add.text(this.rightX, this.pageTop + 16, '', {
-      fontSize: '10px', fontFamily: 'Arial, sans-serif',
-      color: '#3d2510', lineSpacing: 2,
+    this.rightContent = scene.add.text(this.rightX, this.pageTop + 13, '', {
+      fontSize: '9px', fontFamily: 'Arial, sans-serif',
+      color: '#ccddff', lineSpacing: 2,
       wordWrap: { width: this.rightW },
     });
     this.container.add(this.rightContent);
 
-    // Page indicator (bottom of book)
-    this.pageIndicator = scene.add.text(bookX, this.pageBottom, '', {
-      fontSize: '8px', fontFamily: 'Arial, sans-serif', color: '#7a6a5a',
+    // Page indicator (above hint line)
+    this.pageIndicator = scene.add.text(panelX, panelBottom - 13, '', {
+      fontSize: '8px', fontFamily: 'Arial, sans-serif', color: '#7788aa',
     }).setOrigin(0.5, 1);
     this.container.add(this.pageIndicator);
+
+    // Hint line at very bottom
+    const hint = scene.add.text(panelX, panelBottom - 3, 'A/D: tabs  \u2022  W/S: item  \u2022  \u2190\u2192: adjust  \u2022  ESC: close', {
+      fontSize: '8px', fontFamily: 'Arial, sans-serif', color: '#445566',
+    }).setOrigin(0.5, 1);
+    this.container.add(hint);
   }
 
   // --- Menu items for cursor navigation ---
@@ -184,6 +189,7 @@ export class GameMenu {
     this.visible = true;
     this.activeTab = tab || 0;
     this.questPage = 0;
+    this.medalPage = 0;
     this.menuCursor = 0;
     this.container.setVisible(true);
     this.scene.physics.pause();
@@ -191,13 +197,20 @@ export class GameMenu {
     this._buildQuestEntries();
     this._render();
 
+    const KC = Phaser.Input.Keyboard.KeyCodes;
+
     this._onKeyDown = (event) => {
       if (!this.visible) return;
       const code = event.keyCode;
 
-      // W/Up and S/Down for cursor movement
-      if (code === Phaser.Input.Keyboard.KeyCodes.W ||
-          code === Phaser.Input.Keyboard.KeyCodes.UP) {
+      // Number keys 1-7: jump directly to a tab
+      if (code >= 49 && code <= 55) {
+        this._switchTab(code - 49);
+        return;
+      }
+
+      // W / Up arrow — navigate UP within the active tab
+      if (code === KC.W || code === KC.UP) {
         if (this.activeTab === 3) {
           this.menuCursor = Math.max(0, this.menuCursor - 1);
           this.scene.sfx.play('select');
@@ -206,13 +219,16 @@ export class GameMenu {
           this.settingsCursor = Math.max(0, this.settingsCursor - 1);
           this.scene.sfx.play('select');
           this._render();
-        } else if (this.activeTab === 1 && this.questTotalPages > 1) {
+        } else if (this.activeTab === 1 || this.activeTab === 2) {
           this._flipQuestPage(-1);
+        } else if (this.activeTab === 5) {
+          this._flipMedalPage(-1);
         }
         return;
       }
-      if (code === Phaser.Input.Keyboard.KeyCodes.S ||
-          code === Phaser.Input.Keyboard.KeyCodes.DOWN) {
+
+      // S / Down arrow — navigate DOWN within the active tab
+      if (code === KC.S || code === KC.DOWN) {
         if (this.activeTab === 3) {
           const items = this._getMenuItems();
           this.menuCursor = Math.min(items.length - 1, this.menuCursor + 1);
@@ -222,15 +238,56 @@ export class GameMenu {
           this.settingsCursor = Math.min(1, this.settingsCursor + 1);
           this.scene.sfx.play('select');
           this._render();
-        } else if (this.activeTab === 1 && this.questTotalPages > 1) {
+        } else if (this.activeTab === 1 || this.activeTab === 2) {
           this._flipQuestPage(1);
+        } else if (this.activeTab === 5) {
+          this._flipMedalPage(1);
         }
         return;
       }
 
-      // Enter/Space to confirm on Menu tab
-      if ((code === Phaser.Input.Keyboard.KeyCodes.ENTER ||
-           code === Phaser.Input.Keyboard.KeyCodes.SPACE) && this.activeTab === 3) {
+      // A — switch to PREVIOUS tab (wraps around)
+      if (code === KC.A) {
+        this._switchTab((this.activeTab - 1 + TABS.length) % TABS.length);
+        return;
+      }
+
+      // D — switch to NEXT tab (wraps around)
+      if (code === KC.D) {
+        this._switchTab((this.activeTab + 1) % TABS.length);
+        return;
+      }
+
+      // Left arrow — within-tab horizontal action (adjust volume / flip page)
+      if (code === KC.LEFT) {
+        if (this.activeTab === 4) {
+          this._adjustVolume(-1);
+        } else if (this.activeTab === 1 || this.activeTab === 2) {
+          this._flipQuestPage(-1);
+        } else if (this.activeTab === 5) {
+          this._flipMedalPage(-1);
+        } else {
+          this._switchTab((this.activeTab - 1 + TABS.length) % TABS.length);
+        }
+        return;
+      }
+
+      // Right arrow — within-tab horizontal action (adjust volume / flip page)
+      if (code === KC.RIGHT) {
+        if (this.activeTab === 4) {
+          this._adjustVolume(1);
+        } else if (this.activeTab === 1 || this.activeTab === 2) {
+          this._flipQuestPage(1);
+        } else if (this.activeTab === 5) {
+          this._flipMedalPage(1);
+        } else {
+          this._switchTab((this.activeTab + 1) % TABS.length);
+        }
+        return;
+      }
+
+      // Enter / Space — confirm selection on Menu tab
+      if ((code === KC.ENTER || code === KC.SPACE) && this.activeTab === 3) {
         const items = this._getMenuItems();
         if (this.menuCursor < items.length) {
           items[this.menuCursor].action();
@@ -238,41 +295,33 @@ export class GameMenu {
         return;
       }
 
-      // A/D or Left/Right for tab switching (or quest page flipping / settings adjustment)
-      if (code === Phaser.Input.Keyboard.KeyCodes.LEFT ||
-          code === Phaser.Input.Keyboard.KeyCodes.A) {
-        if (this.activeTab === 4) {
-          this._adjustVolume(-1);
-        } else if (this.activeTab === 1 && this.questTotalPages > 1) {
-          this._flipQuestPage(-1);
-        } else {
-          this._switchTab(Math.max(0, this.activeTab - 1));
-        }
-        return;
-      }
-      if (code === Phaser.Input.Keyboard.KeyCodes.RIGHT ||
-          code === Phaser.Input.Keyboard.KeyCodes.D) {
-        if (this.activeTab === 4) {
-          this._adjustVolume(1);
-        } else if (this.activeTab === 1 && this.questTotalPages > 1) {
-          this._flipQuestPage(1);
-        } else if (this.activeTab === 2) {
-          this._flipQuestPage(1);
-        } else {
-          this._switchTab(Math.min(TABS.length - 1, this.activeTab + 1));
-        }
-        return;
-      }
-
-      // ESC/Q/E to close
-      if (code === Phaser.Input.Keyboard.KeyCodes.ESC ||
-          code === Phaser.Input.Keyboard.KeyCodes.Q ||
-          code === Phaser.Input.Keyboard.KeyCodes.E) {
+      // ESC — close (backup; GameScene.update also handles this via JustDown)
+      if (code === KC.ESC) {
         this.close();
         return;
       }
     };
     this.scene.input.keyboard.on('keydown', this._onKeyDown);
+
+    // Manual pointer handler for tab clicks.
+    // Phaser's setInteractive() hit-detection is unreliable for scrollFactor=0
+    // objects inside a container when the camera has a viewport y-offset.
+    // pointer.y is in game-pixel space (0-240); the GameScene camera viewport
+    // starts at y=38 game pixels, so camera-local y = pointer.y - 38.
+    const VIEWPORT_Y = 38;
+    this._onPointerDown = (pointer) => {
+      if (!this.visible) return;
+      const localY = pointer.y - VIEWPORT_Y;
+      for (let i = 0; i < TABS.length; i++) {
+        const ta = this._tabClickAreas[i];
+        if (pointer.x >= ta.x - ta.hw && pointer.x <= ta.x + ta.hw &&
+            localY  >= ta.y - ta.hh && localY  <= ta.y + ta.hh) {
+          this._switchTab(i);
+          return;
+        }
+      }
+    };
+    this.scene.input.on('pointerdown', this._onPointerDown);
   }
 
   close() {
@@ -284,6 +333,10 @@ export class GameMenu {
     if (this._onKeyDown) {
       this.scene.input.keyboard.off('keydown', this._onKeyDown);
       this._onKeyDown = null;
+    }
+    if (this._onPointerDown) {
+      this.scene.input.off('pointerdown', this._onPointerDown);
+      this._onPointerDown = null;
     }
   }
 
@@ -300,10 +353,8 @@ export class GameMenu {
     const isMuted = localStorage.getItem('lizzy-muted') === 'true';
     const newMuted = !isMuted;
     localStorage.setItem('lizzy-muted', newMuted);
-    // Mute/unmute SFX
     const sfx = this.scene.sfx;
     if (sfx) sfx.muted = newMuted;
-    // Mute/unmute music
     const music = this.scene.music;
     if (music && music.masterGain && music.ctx) {
       music.masterGain.gain.setValueAtTime(newMuted ? 0 : 1, music.ctx.currentTime);
@@ -322,6 +373,7 @@ export class GameMenu {
     if (idx === this.activeTab) return;
     this.activeTab = idx;
     this.questPage = 0;
+    this.medalPage = 0;
     this.menuCursor = 0;
     this.scene.sfx.play('select');
     this._render();
@@ -331,6 +383,17 @@ export class GameMenu {
     const newPage = this.questPage + dir;
     if (newPage >= 0 && newPage < this.questTotalPages) {
       this.questPage = newPage;
+      this._render();
+    }
+  }
+
+  _flipMedalPage(dir) {
+    const perPage = 8;
+    const totalPages = Math.max(1, Math.ceil(ACHIEVEMENTS.length / perPage));
+    const newPage = this.medalPage + dir;
+    if (newPage >= 0 && newPage < totalPages) {
+      this.medalPage = newPage;
+      this.scene.sfx.play('select');
       this._render();
     }
   }
@@ -364,10 +427,8 @@ export class GameMenu {
     // Update tab highlights
     for (let i = 0; i < TABS.length; i++) {
       const isActive = i === this.activeTab;
-      this.tabActiveBgs[i].setVisible(isActive);
-      this.tabInactiveBgs[i].setVisible(!isActive);
-      this.tabTexts[i].setColor(isActive ? '#3d2510' : '#555566');
-      this.tabTexts[i].setStyle({ fontStyle: isActive ? 'bold' : 'normal' });
+      this.tabRects[i].setFillStyle(isActive ? 0x334488 : 0x1a2244);
+      this.tabTexts[i].setColor(isActive ? '#ffffff' : '#7788aa');
     }
 
     // Clear page content
@@ -383,6 +444,7 @@ export class GameMenu {
     else if (this.activeTab === 3) this._renderMenu();
     else if (this.activeTab === 4) this._renderSettings();
     else if (this.activeTab === 5) this._renderMedals();
+    else if (this.activeTab === 6) this._renderKeys();
   }
 
   _renderStats() {
@@ -396,13 +458,45 @@ export class GameMenu {
       `XP: ${s.xp}/${s.xpToNext}`,
       `Mana: ${Math.floor(s.player.mana)}/${s.player.maxMana}`,
     ];
-    // Pet bond
-    if (s.pet) {
+    if (s.achievements?.lord_dire_vanquished) {
+      lines.push('', 'Title: Light Bringer');
+    }
+    // Phase 23 — Butterfly journal
+    if (s.hasNet) {
+      const bf = s.caughtButterflies || {};
+      const total = Object.values(bf).reduce((a, b) => a + b, 0);
+      const types = [
+        bf.yellow ? `yellow:${bf.yellow}` : null,
+        bf.green  ? `green:${bf.green}`   : null,
+        bf.blue   ? `blue:${bf.blue}`     : null,
+        bf.orange ? `orange:${bf.orange}` : null,
+      ].filter(Boolean);
+      lines.push('', `Butterflies: ${total}`);
+      if (types.length > 0) lines.push(types.join('  '));
+    }
+    // Pet info
+    if (s.pet && s.petType) {
       const aff = s.petAffection || 0;
       const hearts = Math.min(5, Math.floor(aff / 10));
       const emptyHearts = 5 - hearts;
-      lines.push(``, `Pet Bond: ${'♥'.repeat(hearts)}${'♡'.repeat(emptyHearts)}`);
+      const tier = aff >= 50 ? 3 : aff >= 25 ? 2 : aff >= 10 ? 1 : 0;
+      const petNames = { slime: 'Slimey', bat: 'Batty', mushroom: 'Spore', fairy: 'Glimmer' };
+      const petName = petNames[s.petType] || s.petType;
+      lines.push(``, `Pet: ${petName}  [Tier ${tier}]`, `Bond: ${'♥'.repeat(hearts)}${'♡'.repeat(emptyHearts)} (${aff}/50)`);
     }
+    // Phase 29 — Cozy score
+    if (s._calcCozyScore) {
+      const cozy = s._calcCozyScore();
+      const stars = '✦'.repeat(cozy) + '✧'.repeat(5 - cozy);
+      lines.push('', `Home: ${stars}`);
+    }
+    // Places visited (unique maps entered)
+    const _visitedMaps = s._visitedMaps || new Set();
+    const _totalMaps = 40;
+    lines.push('', `Maps visited: ${_visitedMaps.size}/${_totalMaps}`);
+    // Kills & fish
+    if (s._totalKills) lines.push(`Enemies defeated: ${s._totalKills}`);
+    if (s._fishCount) lines.push(`Fish caught: ${s._fishCount}`);
     this.leftContent.setText(lines.join('\n'));
 
     this.rightTitle.setText('EQUIPMENT');
@@ -420,7 +514,17 @@ export class GameMenu {
     if (matKeys.length > 0) {
       equipLines.push('', 'Materials:');
       for (const k of matKeys) {
-        equipLines.push(`${k.replace(/_/g, ' ')}: ${mats[k]}`);
+        const matName = MATERIALS[k]?.name ?? k.replace(/_/g, ' ');
+        equipLines.push(`${matName}: ${mats[k]}`);
+      }
+    }
+    // Phase 23 — Seeds
+    if (s.hasWateringCan) {
+      const seeds = s.seeds || {};
+      const seedEntries = Object.entries(seeds).filter(([, v]) => v > 0);
+      if (seedEntries.length > 0) {
+        equipLines.push('', 'Seeds:');
+        seedEntries.forEach(([t, v]) => equipLines.push(`${t}: ${v}`));
       }
     }
     this.rightContent.setText(equipLines.join('\n'));
@@ -446,7 +550,7 @@ export class GameMenu {
     if (rightEntries.length > 0) {
       this.rightTitle.setText('');
       this.rightContent.setText(this._formatQuestEntries(rightEntries));
-      this.rightContent.setY(this.pageTop + 16);
+      this.rightContent.setY(this.pageTop + 13);
     }
 
     if (this.questTotalPages > 1) {
@@ -487,7 +591,7 @@ export class GameMenu {
 
     this.rightTitle.setText('');
     this.rightContent.setText(rightEntries.length > 0 ? rightEntries.map(formatEntry).join('\n\n') : '');
-    this.rightContent.setY(this.pageTop + 16);
+    this.rightContent.setY(this.pageTop + 13);
 
     // Total kills
     const total = Object.values(bestiary).reduce((a, b) => a + b, 0);
@@ -509,7 +613,7 @@ export class GameMenu {
     }
     this.leftContent.setText(lines.join('\n'));
 
-    // Show tracked quest on right page
+    // Show tracked quest on right side
     this.rightTitle.setText('TRACKED');
     const trackedId = this.scene.trackedQuestId;
     const qm = this.scene.questManager;
@@ -560,32 +664,49 @@ export class GameMenu {
     this.leftContent.setText(lines.join('\n'));
 
     this.rightTitle.setText('CONTROLS');
-    this.rightContent.setText('W/S: select row\nLeft/Right: adjust\nA/D: also adjust');
+    this.rightContent.setText('W/S: select row\n\u2190\u2192: adjust volume\n\nA/D: switch tabs\n1-7: jump to tab');
   }
 
   _renderMedals() {
-    this.leftTitle.setText('MEDALS');
+    const perPage = 8; // 4 left + 4 right per page
+    const totalPages = Math.max(1, Math.ceil(ACHIEVEMENTS.length / perPage));
+    const page = Math.min(this.medalPage || 0, totalPages - 1);
+    const startIdx = page * perPage;
+    const pageAchs = ACHIEVEMENTS.slice(startIdx, startIdx + perPage);
+
     const achievements = this.scene.achievements || {};
     const earned = ACHIEVEMENTS.filter(a => achievements[a.id]);
-    const locked = ACHIEVEMENTS.filter(a => !achievements[a.id]);
-
-    const leftEntries = ACHIEVEMENTS.slice(0, 4);
-    const rightEntries = ACHIEVEMENTS.slice(4);
 
     const fmt = (ach) => {
+      if (!ach) return '';
       const done = !!achievements[ach.id];
       const prefix = done ? '\u2713' : '\u25cb';
-      const color = done ? '' : '';
       return `${prefix} ${ach.label}\n  ${ach.desc}`;
     };
 
+    const leftEntries = pageAchs.slice(0, 4);
+    const rightEntries = pageAchs.slice(4, 8);
+
+    this.leftTitle.setText('MEDALS');
     this.leftContent.setText(leftEntries.map(fmt).join('\n\n'));
     this.rightTitle.setText('');
     this.rightContent.setText(rightEntries.map(fmt).join('\n\n'));
-    this.rightContent.setY(this.pageTop + 16);
+    this.rightContent.setY(this.pageTop + 13);
 
     const total = earned.length;
-    this.pageIndicator.setText(`${total}/${ACHIEVEMENTS.length} earned`);
+    const pageLabel = totalPages > 1 ? `  W/S: page ${page + 1}/${totalPages}` : '';
+    this.pageIndicator.setText(`${total}/${ACHIEVEMENTS.length} earned${pageLabel}`);
+  }
+
+  _renderKeys() {
+    this.leftTitle.setText('MOVE / COMBAT');
+    this.leftContent.setText(
+      'WASD \u2014 Move\nSPACE \u2014 Attack\nE \u2014 Interact\nF \u2014 Cast Spell\nTAB \u2014 Cycle Spell\nQ \u2014 Pet ability\nSHIFT \u2014 Dodge roll\nJ \u2014 Adventure Journal\nZ \u2014 Dance emote'
+    );
+    this.rightTitle.setText('SYSTEM / UI');
+    this.rightContent.setText(
+      'ESC \u2014 Pause menu\nA/D \u2014 Prev/next tab\nW/S \u2014 Navigate item\n\u2190\u2192 \u2014 Adjust value\n1-7 \u2014 Jump to tab\nM \u2014 Map/Teleport'
+    );
   }
 
   _adjustVolume(dir) {

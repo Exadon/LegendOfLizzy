@@ -9,6 +9,9 @@ export const EQUIPMENT = {
   leather_armor: { id: 'leather_armor', name: 'Leather Armor', slot: 'armor', hp: 2, price: 60, color: '#996633', description: '+2 Max HP' },
   iron_armor: { id: 'iron_armor', name: 'Iron Armor', slot: 'armor', hp: 5, price: 180, color: '#aaaacc', description: '+5 Max HP' },
   warm_cloak: { id: 'warm_cloak', name: 'Warm Cloak', slot: 'armor', hp: 2, price: 0, color: '#ccddee', description: '+2 Max HP (craftable)' },
+
+  // Phase 18 — Wizard Boss drop
+  wizard_staff: { id: 'wizard_staff', name: 'Wizard Staff', slot: 'weapon', attack: 5, magic: 3, price: 0, color: '#aa44ff', description: 'A staff crackling with arcane power. +5 ATK +3 Magic' },
 };
 
 export class EquipmentManager {

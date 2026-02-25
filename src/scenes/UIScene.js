@@ -51,6 +51,8 @@ export class UIScene extends Phaser.Scene {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
       color: '#aaaacc',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(100);
 
     // Inventory hotbar (right side, row 1)
@@ -77,10 +79,11 @@ export class UIScene extends Phaser.Scene {
     this.manaBarFill.setOrigin(0, 0).setScrollFactor(0).setDepth(101);
 
     // Spell indicator (next to mana bar)
-    this.spellIcon = this.add.circle(78, 31, 3, 0xff6622);
+    this.spellIcon = this.add.circle(78, 31, 3, 0x2266ff);
     this.spellIcon.setScrollFactor(0).setDepth(101);
     this.spellLabel = this.add.text(84, 28, 'F', {
       fontSize: '8px', fontFamily: 'Arial, sans-serif', color: '#cccccc',
+      stroke: '#000000', strokeThickness: 2,
     }).setScrollFactor(0).setDepth(101);
 
     // --- Events ---
@@ -110,15 +113,58 @@ export class UIScene extends Phaser.Scene {
 
     gameScene.events.on('time-changed', (label) => {
       this.timeText.setText(label);
+      // Color the time text based on time of day
+      const TIME_COLORS = {
+        Night: '#8899ff', Dawn: '#ffcc66', Morning: '#ffffcc',
+        Afternoon: '#ffffff', Dusk: '#ffaa44', Evening: '#ff8877',
+      };
+      this.timeText.setColor(TIME_COLORS[label] || '#ffffff');
     });
 
     gameScene.events.on('spell-changed', (index, spell) => {
       this.spellIcon.setFillStyle(spell.color);
+      // Show abbreviated spell name next to keybind (e.g. "F: Ice")
+      const abbr = spell.name ? spell.name.split(' ')[0].substring(0, 5) : 'F';
+      this.spellLabel.setText(`F:${abbr}`);
     });
 
     gameScene.events.on('auto-saved', () => {
       this.showSaveIcon();
     });
+
+    // Boss HP bar events
+    gameScene.events.on('boss-ui-update', ({ name, hp, maxHp }) => {
+      if (!this._bossBarBg) this._createBossBar();
+      this._bossBarBg.setVisible(true);
+      this._bossBarFill.setVisible(true);
+      this._bossNameText.setVisible(true);
+      const pct = Math.max(0, hp / maxHp);
+      this._bossBarFill.setSize(Math.round(160 * pct), 5);
+      this._bossNameText.setText(name);
+    }, this);
+
+    gameScene.events.on('boss-ui-hide', () => {
+      if (this._bossBarBg) {
+        this._bossBarBg.setVisible(false);
+        this._bossBarFill.setVisible(false);
+        this._bossNameText.setVisible(false);
+      }
+    }, this);
+  }
+
+  _createBossBar() {
+    const cx = 160; // center of 320px viewport
+    this._bossNameText = this.add.text(cx, 39, '', {
+      fontSize: '8px', fontFamily: 'Arial, sans-serif',
+      color: '#ffddaa', stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(200);
+    this._bossBarBg = this.add.rectangle(cx, 48, 160, 5, 0x330000)
+      .setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(200);
+    this._bossBarFill = this.add.rectangle(cx - 80, 48, 160, 5, 0xdd2222)
+      .setOrigin(0, 0.5).setScrollFactor(0).setDepth(201);
+    this._bossBarBg.setVisible(false);
+    this._bossBarFill.setVisible(false);
+    this._bossNameText.setVisible(false);
   }
 
   showSaveIcon() {
@@ -155,12 +201,15 @@ export class UIScene extends Phaser.Scene {
       heart.setDisplaySize(heartSize, heartSize);
 
       if (heartValue >= 2) {
-        // Full heart
+        // Full heart — no tint
       } else if (heartValue >= 1) {
-        heart.setAlpha(0.55);
+        // Half heart — yellow tint so it's clearly different from full (red) or empty (grey)
+        heart.setTint(0xffdd44);
+        heart.setAlpha(0.85);
       } else {
-        heart.setTint(0x333333);
-        heart.setAlpha(0.6);
+        // Empty heart — grey, dim
+        heart.setTint(0x444444);
+        heart.setAlpha(0.45);
       }
 
       this.hearts.push(heart);
@@ -204,7 +253,9 @@ export class UIScene extends Phaser.Scene {
       const keyLabel = this.add.text(x + 2, startY + 1, `${i + 1}`, {
         fontSize: '8px',
         fontFamily: 'Arial, sans-serif',
-        color: '#cccccc',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 2,
       }).setOrigin(0, 0).setScrollFactor(0).setDepth(103);
       this.inventorySlots.push(keyLabel);
 
@@ -249,7 +300,9 @@ export class UIScene extends Phaser.Scene {
     const diedText = this.add.text(cx, cy - 30, 'YOU DIED', {
       fontSize: '16px',
       fontFamily: 'Arial, sans-serif',
-      color: '#3d1010',
+      color: '#ff6666',
+      stroke: '#220000',
+      strokeThickness: 4,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2002).setAlpha(0);
     this.tweens.add({
       targets: diedText,
@@ -267,12 +320,15 @@ export class UIScene extends Phaser.Scene {
     const statsText = this.add.text(cx, cy + 4, `Level ${level}  |  ${gold} Gold`, {
       fontSize: '12px',
       fontFamily: 'Arial, sans-serif',
-      color: '#5a2a2a',
+      color: '#ddbbbb',
+      stroke: '#220000',
+      strokeThickness: 3,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2002).setAlpha(0);
     this.tweens.add({ targets: statsText, alpha: 1, duration: 400, delay: 900 });
 
     const opt1 = this.add.text(cx, cy + 22, 'ENTER: Continue', {
-      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#2a1a08',
+      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#ffdd88',
+      stroke: '#220000', strokeThickness: 3,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2002).setAlpha(0);
 
     this.tweens.add({ targets: opt1, alpha: 1, duration: 400, delay: 1200 });

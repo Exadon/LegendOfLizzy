@@ -110,7 +110,7 @@ export class IceWitch extends Phaser.Physics.Arcade.Sprite {
       bolt.slow = true;
       bolt.damage = this.damage;
 
-      this.scene.physics.add.overlap(this.scene.player, bolt, () => {
+      const ov = this.scene.physics.add.overlap(this.scene.player, bolt, () => {
         if (!bolt.active) return;
         if (!this.scene.player.invulnerable) {
           this.scene.player.takeDamage(1);
@@ -122,8 +122,10 @@ export class IceWitch extends Phaser.Physics.Arcade.Sprite {
             if (this.scene.player) this.scene.player.speed = origSpeed;
           });
         }
+        this.scene.physics.world.removeCollider(ov);
         bolt.destroy();
       });
+      bolt.on('destroy', () => this.scene.physics.world.removeCollider(ov));
 
       this._addTimer(this.scene.time.delayedCall(1500, () => {
         if (bolt.active) bolt.destroy();
@@ -147,13 +149,14 @@ export class IceWitch extends Phaser.Physics.Arcade.Sprite {
       });
       // Damage on touch
       this.scene.physics.add.existing(block, true);
-      this.scene.physics.add.overlap(this.scene.player, block, () => {
+      const blockOv = this.scene.physics.add.overlap(this.scene.player, block, () => {
         if (!block.active) return;
         if (!this.scene.player.invulnerable) {
           this.scene.player.takeDamage(1);
           this.scene.sfx.play('playerHurt');
         }
       });
+      block.on('destroy', () => this.scene.physics.world.removeCollider(blockOv));
     }
   }
 
@@ -230,6 +233,10 @@ export class IceWitch extends Phaser.Physics.Arcade.Sprite {
 
     this._timers = [];
     this.scene.events.emit('boss-defeated');
+    const _bx = this.x, _by = this.y;
+    this.scene.time.delayedCall(600, () => {
+      if (this.scene && this.scene._dropCrystal) this.scene._dropCrystal(_bx, _by + 20, 0x44ee44, 'crystal_green');
+    });
     this.scene.time.delayedCall(500, () => {
       this.hpBarBg.destroy();
       this.hpBarFill.destroy();
